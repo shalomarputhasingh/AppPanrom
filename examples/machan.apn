@@ -1,0 +1,438 @@
+# Machan Planner - velai, kaasu, dialogue, vilayattu - ellaam oru app-la.
+# Pure AppPanrom, Tanglish vocabulary (seyal, thirumbi_kudu, muyarchi/pidi, sari/thappu, batan, ...).
+# Features: 6 screens, handlers with arguments, lists, dicts, json + local storage, try/catch, random, clipboard, vibrate,
+# 5 switchable looks (clay / glass / brutal / soft / minimal), dark mode, gradients and animations.
+app_uruvakku("Machan Planner")
+app_id_set("com.apppanrom.machan")
+app_version_set("1.0.0")
+
+# ---------------------------------------------------------------- state (saved on the phone)
+seyal load_list(key):
+    muyarchi:
+        thirumbi_kudu json_padi(data_edu(key, "[]"))
+    pidi error:
+        thirumbi_kudu []
+
+mari naan = data_edu("naan", "")
+mari look = data_edu("look", "clay")
+mari iruttu = data_edu("iruttu", thappu)
+mari budget = data_edu("budget", 5000)
+mari velaigal = load_list("velaigal")
+mari kaasu = load_list("kaasu")
+mari best = data_edu("best", 0)
+
+# game
+mari rahasiyam = random_ennai(1, 20)
+mari muyarchigal = 0
+mari hint = "1-la irundhu 20 varaikum oru number nenachuken, kandupidi machan!"
+
+# dialogues
+mari vaakiyangal = [
+    {"v": "ucham", "t": "Fail aana enna machan? Next attempt-la ellaam sari aayidum!"},
+    {"v": "ucham", "t": "Chinna chinna adi eduthu vechaa thaan, periya dhooram pogalaam."},
+    {"v": "ucham", "t": "Late-a aanaalum latest-a vaa da; vandhute irukka, adhu pothum."},
+    {"v": "ucham", "t": "Monday-nu bayapadaadha; coffee irukku, plan irukku, nee irukka."},
+    {"v": "sirippu", "t": "Alarm-a off pannittu 'naalaiki paathukalaam'nu sollradhu thaan namma national sport."},
+    {"v": "sirippu", "t": "Diet naalaiki-nu sollitu, biryani innaiki-ve saapdradhu thaan namma tradition."},
+    {"v": "sirippu", "t": "Phone 1% irukkum bodhu thaan, ellaa important message-um varum."},
+    {"v": "sirippu", "t": "WiFi password kekkaama, mudhal-la 'bro, signal irukka'nu kaelu."},
+    {"v": "kaasu", "t": "Kaasu vandhaa pochu, selavu panna mudhal-la ezhudhi vai machan."},
+    {"v": "kaasu", "t": "Chinna selavu-nu nenaichaa thaan, month end-la wallet kaaliya irukkum."},
+    {"v": "kaasu", "t": "Savings oru nalla nanban; thevai bodhu thaan kai kudukkum."}
+]
+mari vaakiyam_filter = "ellaam"
+mari vaakiyam = random_edu(vaakiyangal)["t"]
+mari flip = sari
+
+mari vagaigal = ["Saapadu", "Payanam", "Shopping", "Bill", "Veena selavu"]
+
+# ---------------------------------------------------------------- helpers
+# the language has no `a if c else b`, so a tiny pure helper picks one of two values
+seyal thera(c, a, b):
+    enna_na c:
+        thirumbi_kudu a
+    thirumbi_kudu b
+
+seyal sathavigidham(a, b):
+    enna_na b <= 0:
+        thirumbi_kudu 0
+    thirumbi_kudu kuraivu(100, suththam_pannu(a * 100 / b))
+
+seyal semippu():
+    data_save_pannu("naan", naan)
+    data_save_pannu("look", look)
+    data_save_pannu("iruttu", iruttu)
+    data_save_pannu("budget", budget)
+    data_save_pannu("velaigal", json_aakku(velaigal))
+    data_save_pannu("kaasu", json_aakku(kaasu))
+    data_save_pannu("best", best)
+
+seyal vanakkam_sollu():
+    # UTC -> IST (+5:30), then a greeting for the time of day
+    mari bagam = text_pirichu(ippo(), "T")
+    mari nerum = text_pirichu(bagam[1], ":")
+    mari nimidam = (muzhu_ennai(nerum[0]) * 60 + muzhu_ennai(nerum[1]) + 330) % 1440
+    mari mani = muzhu_ennai(nimidam / 60)
+    enna_na mani < 5:
+        thirumbi_kudu "Innum thoongala-va machan?"
+    illana_enna mani < 12:
+        thirumbi_kudu "Kaalai vanakkam"
+    illana_enna mani < 16:
+        thirumbi_kudu "Mathiyam vanakkam"
+    illana_enna mani < 20:
+        thirumbi_kudu "Maalai vanakkam"
+    illana:
+        thirumbi_kudu "Iravu vanakkam"
+
+seyal mudinja_velai():
+    mari n = 0
+    ovvoru v ulle velaigal:
+        enna_na v["d"]:
+            n = n + 1
+    thirumbi_kudu n
+
+seyal kaasu_kootu():
+    mari total = 0
+    ovvoru k ulle kaasu:
+        total = total + k["a"]
+    thirumbi_kudu total
+
+seyal vagai_kootu():
+    mari d = {}
+    ovvoru k ulle kaasu:
+        d[k["c"]] = dict_edu(d, k["c"], 0) + k["a"]
+    thirumbi_kudu d
+
+seyal kaasu_sathavigidham():
+    thirumbi_kudu sathavigidham(kaasu_kootu(), budget)
+
+# ---------------------------------------------------------------- looks (all computed, so one switch re-skins the whole app)
+seyal screen_style():
+    enna_na look == "glass":
+        enna_na iruttu:
+            thirumbi_kudu {"background": "#0F172A", "background_to": "#6D28D9", "gradient_angle": 160}
+        thirumbi_kudu {"background": "#6366F1", "background_to": "#EC4899", "gradient_angle": 160}
+    illana_enna look == "brutal":
+        enna_na iruttu:
+            thirumbi_kudu {"background": "#18181B"}
+        thirumbi_kudu {"background": "#FFF7ED"}
+    illana_enna look == "soft":
+        enna_na iruttu:
+            thirumbi_kudu {"background": "#2B2F3A"}
+        thirumbi_kudu {"background": "#E5E7EB"}
+    illana_enna look == "minimal":
+        enna_na iruttu:
+            thirumbi_kudu {"background": "#111827"}
+        thirumbi_kudu {"background": "#FFFFFF"}
+    enna_na iruttu:
+        thirumbi_kudu {"background": "#1E1B4B"}
+    thirumbi_kudu {"background": "#E9E4FF"}
+
+# text colour on the bare screen
+seyal tint():
+    enna_na iruttu allathu look == "glass":
+        thirumbi_kudu "#FFFFFF"
+    thirumbi_kudu "#1F2937"
+
+# text colour on a card / button
+seyal ink():
+    enna_na look == "glass":
+        thirumbi_kudu "#FFFFFF"
+    illana_enna look == "brutal":
+        thirumbi_kudu "#111111"
+    illana_enna look == "soft":
+        enna_na iruttu:
+            thirumbi_kudu "#E5E7EB"
+        thirumbi_kudu "#374151"
+    illana_enna look == "minimal":
+        enna_na iruttu:
+            thirumbi_kudu "#F9FAFB"
+        thirumbi_kudu "#111827"
+    thirumbi_kudu "#3B1F6E"
+
+# style of a card or button in the colour `niram`, `idam` = padding, `delay` = entrance delay in seconds
+seyal box(niram, idam, delay):
+    mari s = {"padding": idam, "gap": 8, "animate": "slide_up", "animate_delay": delay, "text_color": ink()}
+    enna_na look == "clay":
+        s["background"] = niram
+        s["clay"] = sari
+        s["corner_radius"] = 28
+    illana_enna look == "glass":
+        s["background"] = "#FFFFFF"
+        s["glass"] = sari
+    illana_enna look == "brutal":
+        s["background"] = niram
+        s["brutal"] = sari
+        enna_na iruttu:
+            s["border_color"] = "#FFFFFF"
+    illana_enna look == "soft":
+        enna_na iruttu:
+            s["background"] = "#2B2F3A"
+        illana:
+            s["background"] = "#E5E7EB"
+        s["neumorphic"] = sari
+    illana:
+        enna_na iruttu:
+            s["background"] = "#1F2937"
+            s["border_color"] = "#374151"
+        illana:
+            s["background"] = "#FFFFFF"
+            s["border_color"] = "#E5E7EB"
+        s["border_width"] = 1
+        s["corner_radius"] = 10
+    thirumbi_kudu s
+
+# the same style with a fixed width (for cards that sit side by side in a row)
+seyal wide(s, w):
+    s["width"] = w
+    thirumbi_kudu s
+
+seyal button_style(niram, delay):
+    mari s = box(niram, 12, delay)
+    s["height"] = 54
+    s["font_size"] = 18
+    s["font_weight"] = "bold"
+    thirumbi_kudu s
+
+# ---------------------------------------------------------------- handlers
+seyal go_velai():
+    screen_ku_poo("velai")
+
+seyal go_kaasu():
+    screen_ku_poo("kaasu")
+
+seyal go_vaakiyam():
+    screen_ku_poo("vaakiyam")
+
+seyal go_vilayattu():
+    screen_ku_poo("vilayattu")
+
+seyal go_settings():
+    screen_ku_poo("settings")
+
+seyal velai_serthu():
+    mari t = text_suththam(input_value("velai_input"))
+    enna_na t == "":
+        toast_kaattu("Edhaavadhu ezhudhu da machan!")
+        thirumbi_kudu onnum_illa
+    enna_na neelam(velaigal) >= 12:
+        toast_kaattu("Pothum da, 12 velai-ku mela vendam. Mudhal-la mudi!")
+        thirumbi_kudu onnum_illa
+    serthu(velaigal, {"t": t, "d": thappu})
+    input_set("velai_input", "")
+    semippu()
+
+seyal velai_maathu(i):
+    velaigal[i]["d"] = illaadha velaigal[i]["d"]
+    semippu()
+    enna_na velaigal[i]["d"]:
+        toast_kaattu("Semma! Onnu mudinjadhu")
+    enna_na neelam(velaigal) > 0 matrum mudinja_velai() == neelam(velaigal):
+        vibrate_pannu(300)
+        message_kaattu("Ellaa velaiyum mudinjuduchu! Nee thaan da thalaivar!")
+
+seyal velai_neekku(i):
+    neekku(velaigal, i)
+    semippu()
+
+seyal velai_clear():
+    velaigal = []
+    semippu()
+    toast_kaattu("Ellaa velaiyum thoodachaachu")
+
+seyal kaasu_serthu():
+    mari alavu = input_value("kaasu_alavu")
+    enna_na alavu == onnum_illa allathu alavu <= 0:
+        toast_kaattu("Sariyaana amount podu machan")
+        thirumbi_kudu onnum_illa
+    enna_na neelam(kaasu) >= 30:
+        toast_kaattu("Pazhaya kanakku konjam neekkidu da")
+        thirumbi_kudu onnum_illa
+    mari note = text_suththam(input_value("kaasu_note"))
+    enna_na note == "":
+        note = "-"
+    serthu(kaasu, {"a": alavu, "c": input_value("kaasu_vagai"), "n": note})
+    input_set("kaasu_alavu", onnum_illa)
+    input_set("kaasu_note", "")
+    semippu()
+    enna_na kaasu_kootu() > budget:
+        vibrate_pannu(200)
+        message_kaattu("Aiyayo! Budget-a thaandiduchu da. Konjam kattuppaadu!")
+    illana_enna kaasu_kootu() * 100 / budget >= 80:
+        toast_kaattu("Budget-la 80% aachu, kavanam machan")
+
+seyal kaasu_neekku(i):
+    neekku(kaasu, i)
+    semippu()
+
+seyal vaakiyam_maathu():
+    mari pattiyal = []
+    ovvoru v ulle vaakiyangal:
+        enna_na vaakiyam_filter == "ellaam" allathu v["v"] == vaakiyam_filter:
+            serthu(pattiyal, v["t"])
+    vaakiyam = random_edu(pattiyal)
+    flip = illaadha flip
+
+seyal vaakiyam_filter_maathu():
+    vaakiyam_filter = input_value("vaakiyam_filter_input")
+    vaakiyam_maathu()
+
+seyal vaakiyam_copy():
+    clipboard_copy(vaakiyam)
+    toast_kaattu("Copy aachu! Friend-ku anuppu")
+
+seyal oohi_paar():
+    mari g = input_value("oohi_ennai")
+    enna_na g == onnum_illa:
+        toast_kaattu("Oru number podu da")
+        thirumbi_kudu onnum_illa
+    muyarchigal = muyarchigal + 1
+    enna_na g == rahasiyam:
+        hint = "Semma! " + text_aakku(muyarchigal) + " muyarchi-la kandupidichuttey!"
+        enna_na best == 0 allathu muyarchigal < best:
+            best = muyarchigal
+            semippu()
+        vibrate_pannu(250)
+        message_kaattu("Mass da! " + text_aakku(muyarchigal) + " muyarchi-la jeyichuttey!")
+    illana_enna g < rahasiyam:
+        hint = "Konjam periya number podu machan (" + text_aakku(g) + " romba chinna)"
+    illana:
+        hint = "Konjam kuraichu podu da (" + text_aakku(g) + " romba periya)"
+
+seyal pudhu_vilayattu():
+    rahasiyam = random_ennai(1, 20)
+    muyarchigal = 0
+    hint = "Pudhu number ready! Kandupidi machan."
+    input_set("oohi_ennai", onnum_illa)
+
+seyal naan_maathu():
+    naan = text_suththam(input_value("naan_input"))
+    semippu()
+
+seyal budget_maathu():
+    mari b = input_value("budget_input")
+    enna_na b != onnum_illa matrum b > 0:
+        budget = b
+        semippu()
+
+seyal look_maathu():
+    look = input_value("look_input")
+    semippu()
+
+seyal iruttu_maathu():
+    iruttu = input_value("iruttu_input")
+    semippu()
+
+seyal ellam_azhi():
+    data_clear_pannu()
+    naan = ""
+    look = "clay"
+    iruttu = thappu
+    budget = 5000
+    velaigal = []
+    kaasu = []
+    best = 0
+    toast_kaattu("Ellaa data-vum azhinjuduchu")
+
+# ---------------------------------------------------------------- screens
+screen_uruvakku("home", style=screen_style()):
+    screen_title("Machan Planner")
+    column_uruvakku(style={"padding": 20, "gap": 16}):
+        thalaippu(vanakkam_sollu() + thera(naan == "", "", ", " + naan), style={"text_color": tint(), "font_size": 26, "animate": "slide_up"})
+        card_uruvakku(style=box("#FDE68A", 18, 0.1)):
+            text_kaattu(vaakiyam, style={"font_size": 17, "text_color": ink()})
+            text_kaattu("- indha naal-oda dialogue", style={"font_size": 12, "text_color": ink(), "text_align": "right"})
+        row_uruvakku(style={"gap": 12}):
+            card_uruvakku(style=wide(box("#86EFAC", 14, 0.2), "48%")):
+                text_kaattu("Velai", style={"font_weight": "bold", "text_color": ink()})
+                text_kaattu(text_aakku(mudinja_velai()) + " / " + text_aakku(neelam(velaigal)), style={"font_size": 28, "font_weight": "bold", "text_color": ink()})
+                progress_kaattu(sathavigidham(mudinja_velai(), neelam(velaigal)))
+            card_uruvakku(style=wide(box("#FDBA74", 14, 0.3), "48%")):
+                text_kaattu("Kaasu", style={"font_weight": "bold", "text_color": ink()})
+                text_kaattu("Rs " + text_aakku(kaasu_kootu()), style={"font_size": 28, "font_weight": "bold", "text_color": ink()})
+                progress_kaattu(kaasu_sathavigidham(), peyar="Budget Rs " + text_aakku(budget))
+        batan("Velai Pattiyal", click_pannumbodhu=go_velai, style=button_style("#C4B5FD", 0.4))
+        batan("Kaasu Kanakku", click_pannumbodhu=go_kaasu, style=button_style("#FCA5A5", 0.5))
+        batan("Dialogue Machan", click_pannumbodhu=go_vaakiyam, style=button_style("#93C5FD", 0.6))
+        batan("Vilayattu - Number Kandupidi", click_pannumbodhu=go_vilayattu, style=button_style("#F9A8D4", 0.7))
+        batan("Settings", click_pannumbodhu=go_settings, style=button_style("#D1D5DB", 0.8))
+
+screen_uruvakku("velai", style=screen_style()):
+    screen_title("Velai Pattiyal")
+    column_uruvakku(style={"padding": 20, "gap": 12}):
+        card_uruvakku(style=box("#C4B5FD", 16, 0)):
+            input_uruvakku("velai_input", peyar="Pudhu velai", kurippu="Enna panna pora, machan?", submit_pannumbodhu=velai_serthu)
+            batan("Serthu Kodu", click_pannumbodhu=velai_serthu, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 14})
+        progress_kaattu(sathavigidham(mudinja_velai(), neelam(velaigal)), peyar=text_aakku(mudinja_velai()) + " / " + text_aakku(neelam(velaigal)) + " mudinjadhu")
+        enna_na neelam(velaigal) == 0:
+            text_kaattu("Innum velai onnum illa. Mela oru velai serthu da!", style={"text_color": tint(), "animate": "fade_in"})
+        ovvoru i ulle ellai(neelam(velaigal)):
+            card_uruvakku(style=box(thera(velaigal[i]["d"], "#FFFFFF", "#86EFAC"), 12, i * 0.05)):
+                row_uruvakku(style={"gap": 8, "justify": "space_between"}):
+                    text_kaattu(thera(velaigal[i]["d"], "[x] ", "[ ] ") + velaigal[i]["t"], style={"font_size": 17, "text_color": ink(), "width": "46%"})
+                    batan(thera(velaigal[i]["d"], "Thirumba", "Mudi"), click_pannumbodhu=velai_maathu(i), style={"background": "#16A34A", "text_color": "#FFFFFF", "corner_radius": 12, "width": "28%", "padding": 6, "font_size": 14})
+                    batan("X", click_pannumbodhu=velai_neekku(i), style={"background": "#DC2626", "text_color": "#FFFFFF", "corner_radius": 12, "width": "14%", "padding": 6})
+        enna_na neelam(velaigal) > 0:
+            batan("Ellaathaiyum Thoodai", click_pannumbodhu=velai_clear, style={"background": "#6B7280", "text_color": "#FFFFFF", "corner_radius": 14})
+
+screen_uruvakku("kaasu", style=screen_style()):
+    screen_title("Kaasu Kanakku")
+    column_uruvakku(style={"padding": 20, "gap": 12}):
+        card_uruvakku(style=box("#FDBA74", 16, 0)):
+            text_kaattu("Ippo varaikum: Rs " + text_aakku(kaasu_kootu()) + "  (budget Rs " + text_aakku(budget) + ")", style={"font_weight": "bold", "text_color": ink()})
+            progress_kaattu(kaasu_sathavigidham(), peyar=text_aakku(kaasu_sathavigidham()) + "% selavu aayiduchu")
+            enna_na kaasu_kootu() > budget:
+                text_kaattu("Budget thaandiduchu! Kattuppaadu machan!", style={"text_color": "#B91C1C", "font_weight": "bold", "animate": "shake"})
+        card_uruvakku(style=box("#FCA5A5", 16, 0.1)):
+            ennai_input("kaasu_alavu", peyar="Evlo selavu (Rs)", kurippu="250")
+            dropdown_uruvakku("kaasu_vagai", thervugal=vagaigal, peyar="Edhukku?", modhal="Saapadu")
+            input_uruvakku("kaasu_note", peyar="Kurippu", kurippu="Biryani, auto, ...")
+            batan("Selavu Serthu", click_pannumbodhu=kaasu_serthu, style={"background": "#B91C1C", "text_color": "#FFFFFF", "corner_radius": 14})
+        text_kaattu("Vagai-vaari", style={"text_color": tint(), "font_weight": "bold"})
+        ovvoru k ulle dict_saavigal(vagai_kootu()):
+            card_uruvakku(style=box("#FFFFFF", 10, 0)):
+                text_kaattu(k + ": Rs " + text_aakku(vagai_kootu()[k]), style={"text_color": ink()})
+                progress_kaattu(sathavigidham(vagai_kootu()[k], kaasu_kootu()))
+        text_kaattu("Kadaisi selavugal", style={"text_color": tint(), "font_weight": "bold"})
+        enna_na neelam(kaasu) == 0:
+            text_kaattu("Innum selavu onnum illa, nalladhu thaan!", style={"text_color": tint()})
+        ovvoru i ulle ellai(neelam(kaasu)):
+            card_uruvakku(style=box("#FDE68A", 10, i * 0.04)):
+                row_uruvakku(style={"gap": 8, "justify": "space_between"}):
+                    text_kaattu(kaasu[i]["c"] + " - Rs " + text_aakku(kaasu[i]["a"]) + " (" + kaasu[i]["n"] + ")", style={"text_color": ink(), "width": "78%"})
+                    batan("X", click_pannumbodhu=kaasu_neekku(i), style={"background": "#DC2626", "text_color": "#FFFFFF", "corner_radius": 12, "width": "16%"})
+
+screen_uruvakku("vaakiyam", style=screen_style()):
+    screen_title("Dialogue Machan")
+    column_uruvakku(style={"padding": 20, "gap": 14}):
+        dropdown_uruvakku("vaakiyam_filter_input", thervugal=["ellaam", "ucham", "sirippu", "kaasu"], peyar="Edhu venum?", modhal=vaakiyam_filter, change_aagumbodhu=vaakiyam_filter_maathu)
+        card_uruvakku(style={"background": "#FDE68A", "padding": 24, "gap": 12, "animate": thera(flip, "pop", "zoom_in"), "clay": look == "clay", "glass": look == "glass", "brutal": look == "brutal", "neumorphic": look == "soft", "corner_radius": thera(look == "clay", 32, 12)}):
+            text_kaattu(vaakiyam, style={"font_size": 22, "font_weight": "bold", "text_color": thera(look == "glass", "#FFFFFF", "#3B1F6E")})
+        row_uruvakku(style={"gap": 12, "justify": "space_between"}):
+            batan("Innoru Dialogue", click_pannumbodhu=vaakiyam_maathu, style=button_style("#93C5FD", 0.1))
+            batan("Copy", click_pannumbodhu=vaakiyam_copy, style=button_style("#86EFAC", 0.2))
+
+screen_uruvakku("vilayattu", style=screen_style()):
+    screen_title("Number Kandupidi")
+    column_uruvakku(style={"padding": 20, "gap": 14}):
+        card_uruvakku(style=box("#F9A8D4", 18, 0)):
+            text_kaattu(hint, style={"font_size": 18, "text_color": ink(), "animate": "fade_in"})
+            text_kaattu("Muyarchigal: " + text_aakku(muyarchigal) + "    Best: " + thera(best == 0, "-", text_aakku(best)), style={"text_color": ink(), "font_weight": "bold"})
+        card_uruvakku(style=box("#C4B5FD", 16, 0.1)):
+            ennai_input("oohi_ennai", peyar="Un guess (1-20)", kurippu="10")
+            batan("Paar!", click_pannumbodhu=oohi_paar, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 14})
+        batan("Pudhu Vilayattu", click_pannumbodhu=pudhu_vilayattu, style=button_style("#86EFAC", 0.2))
+
+screen_uruvakku("settings", style=screen_style()):
+    screen_title("Settings")
+    column_uruvakku(style={"padding": 20, "gap": 14}):
+        card_uruvakku(style=box("#C4B5FD", 16, 0)):
+            input_uruvakku("naan_input", peyar="Un peru", kurippu="Machan", modhal=naan, change_aagumbodhu=naan_maathu)
+            ennai_input("budget_input", peyar="Maadha budget (Rs)", modhal=budget, change_aagumbodhu=budget_maathu)
+        card_uruvakku(style=box("#93C5FD", 16, 0.1)):
+            dropdown_uruvakku("look_input", thervugal=["clay", "glass", "brutal", "soft", "minimal"], peyar="App look", modhal=look, change_aagumbodhu=look_maathu)
+            toggle_uruvakku("iruttu_input", peyar="Iruttu mode (dark)", modhal=iruttu, change_aagumbodhu=iruttu_maathu)
+        card_uruvakku(style=box("#FDE68A", 16, 0.2)):
+            text_kaattu("Machan Planner v1.0.0", style={"font_weight": "bold", "text_color": ink()})
+            text_kaattu("AppPanrom-la, Tanglish-la, nanbanukaaga senjadhu.", style={"text_color": ink()})
+        batan("Ellaa Data-vum Azhi", click_pannumbodhu=ellam_azhi, style={"background": "#DC2626", "text_color": "#FFFFFF", "corner_radius": 14, "height": 52})

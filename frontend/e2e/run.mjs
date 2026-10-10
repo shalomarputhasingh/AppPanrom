@@ -564,6 +564,61 @@ screen_uruvakku("home"):
       if (!same) throw new Error('input was re-created / lost focus while typing');
     } finally { srv2.close(); }
   });
+  await step('Machan Planner (flagship Tanglish app): tasks, expenses, dropdown state, looks, persistence - in Chromium', async () => {
+    const out = path.join(data, 'proj-machan');
+    const r = spawnSync('python3', ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', 'machan.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
+    if (r.status !== 0) throw new Error('generate failed: ' + r.stderr);
+    const www = path.join(out, 'app/src/main/assets/www');
+    const srv = createServer((req, res) => {
+      const f = path.join(www, req.url.split('?')[0].replace(/^\/assets\/www\//, ''));
+      try { res.setHeader('content-type', f.endsWith('.js') ? 'text/javascript' : 'text/html'); res.end(readFileSync(f)); } catch { res.statusCode = req.url.includes('favicon') ? 204 : 404; res.end(); }
+    }).listen(8793);
+    try {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+      const m = await ctx.newPage();
+      const errs = [];
+      m.on('pageerror', (e) => errs.push(e.message));
+      m.on('console', (c) => { if (c.type() === 'error' || (c.type() === 'warning' && !/vibrat|clipboard/i.test(c.text()))) errs.push(c.text()); });
+      await m.goto('http://127.0.0.1:8793/assets/www/index.html');
+      await m.getByRole('button', { name: 'Velai Pattiyal' }).click();
+      for (const t of ['Biryani saapidu', 'Amma-ku phone pannu']) { await m.getByLabel('Pudhu velai').fill(t); await m.getByRole('button', { name: 'Serthu Kodu' }).click(); }
+      await m.getByText('[ ] Amma-ku phone pannu').waitFor();
+      await m.getByRole('button', { name: 'Mudi' }).nth(1).click();   // the second card's own button (handler argument)
+      await m.getByText('[x] Amma-ku phone pannu').waitFor();
+      await m.getByText('1 / 2 mudinjadhu').waitFor();
+      await m.getByRole('button', { name: 'Back' }).click();
+      await m.getByRole('button', { name: 'Kaasu Kanakku' }).click();
+      await m.getByLabel('Edhukku?').selectOption('Payanam');
+      await m.getByLabel('Evlo selavu (Rs)').fill('400');
+      await m.getByLabel('Kurippu').fill('Bus pass');
+      if ((await m.getByLabel('Edhukku?').inputValue()) !== 'Payanam') throw new Error('dropdown lost its value while typing (patching bug)');
+      await m.getByRole('button', { name: 'Selavu Serthu' }).click();
+      await m.getByText('Payanam: Rs 400').waitFor();
+      if ((await m.getByLabel('Edhukku?').inputValue()) !== 'Payanam') throw new Error('dropdown reset after add');
+      await m.getByRole('button', { name: 'Back' }).click();
+      await m.getByText('Rs 400', { exact: true }).waitFor();
+      // look switch re-skins everything; dark mode too
+      await m.getByRole('button', { name: 'Settings' }).click();
+      await m.getByLabel('App look').selectOption('brutal');
+      const card = m.locator('.ap-card').first();
+      await m.waitForFunction(() => /3px/.test(getComputedStyle(document.querySelector('.ap-card')).borderTopWidth));
+      await m.getByLabel('App look').selectOption('glass');
+      await m.waitForFunction(() => /blur/.test(getComputedStyle(document.querySelector('.ap-card')).backdropFilter));
+      await m.getByLabel('Iruttu mode (dark)').check({ force: true });
+      await m.getByRole('button', { name: 'Back' }).click();
+      await m.waitForTimeout(1500);
+      await shot(m, '11-machan-glass-dark');
+      // persistence: reload keeps tasks, spending, look and dark mode
+      await m.reload();
+      await m.getByRole('button', { name: 'Velai Pattiyal' }).click();
+      await m.getByText('[x] Amma-ku phone pannu').waitFor();
+      await m.getByRole('button', { name: 'Back' }).click();
+      await m.getByText('Rs 400', { exact: true }).waitFor();
+      if (!/blur/.test(await m.locator('.ap-card').first().evaluate((el) => getComputedStyle(el).backdropFilter))) throw new Error('look was not restored after reload');
+      if (errs.length) throw new Error('page errors: ' + errs.join('; '));
+      await ctx.close();
+    } finally { srv.close(); }
+  });
   await step('no uncaught page errors', async () => {
     if (pageErrors.length) throw new Error(pageErrors.join('; '));
   });

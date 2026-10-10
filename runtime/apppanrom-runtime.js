@@ -641,7 +641,13 @@
     function buildComponent(n, env) {
       var props = {};
       Object.keys(n.props).forEach(function (k) { props[k] = evalExpr(n.props[k], env); });
-      var view = { c: n.c, props: normalizeProps(n.c, props, n.pos), events: n.events || {}, style: {}, pos: n.pos };
+      var events = {};
+      Object.keys(n.events || {}).forEach(function (k) {
+        var h = n.events[k];
+        // a handler with arguments: they are evaluated now, while drawing, so every list item can carry its own values
+        events[k] = typeof h === 'string' ? h : { fn: h.fn, args: h.args.map(function (a) { return evalExpr(a, env); }) };
+      });
+      var view = { c: n.c, props: normalizeProps(n.c, props, n.pos), events: events, style: {}, pos: n.pos };
       if (n.style) {
         var raw = evalExpr(n.style, env), res = validateStyle(raw, styleSchema);
         view.style = res.valid;
@@ -729,9 +735,11 @@
       });
     };
     /** Run an event handler by function name. Errors are logged, never thrown. */
-    rt.fire = function (handlerName) {
+    rt.fire = function (handler, args) {
+      if (handler && typeof handler === 'object') { args = handler.args; handler = handler.fn; }  // {fn, args} from a view
+      var handlerName = handler;
       try {
-        guarded(function () { rendering = false; callUser(handlerName, ir.functions[handlerName], [], null); });
+        guarded(function () { rendering = false; callUser(handlerName, ir.functions[handlerName], args || [], null); });
       } catch (e) {
         if (!e || !e.isApError) throw e;
         log('error', "In handler '" + handlerName + "': " + formatError(e));
@@ -1047,6 +1055,9 @@
       return sg;
     }
 
+    /** Identity of an event binding (function + argument values): equal keys mean the same listener behaviour. */
+    function evKey(h) { return !h ? '' : typeof h === 'string' ? h : h.fn + '(' + JSON.stringify(h.args) + ')'; }
+
     function buildView(v, shellOnly) {
       var s = v.style, node, c = v.c, p = v.props;
       if (c === 'title') { node = el('h1', 'ap-title', p.text); node.setAttribute('role', 'heading'); node.setAttribute('aria-level', '1'); }
@@ -1058,7 +1069,7 @@
         if (design && !p.enabled) node.style.opacity = '0.5';
         var h = v.events.click_pannumbodhu;
         if (h && !design) node.addEventListener('click', function () { rt.fire(h); });
-        node.setAttribute('data-aps', 'b:' + (h || '') + (design ? ':d' : ''));
+        node.setAttribute('data-aps', 'b:' + evKey(h) + (design ? ':d' : ''));
       } else if (INPUT_KIND[c]) node = buildInput(v);
       else if (c === 'image_kaattu') { node = el('img', 'ap-image'); if (p.src) node.src = p.src; node.alt = p.alt; }
       else if (c === 'list_kaattu') {
@@ -1146,7 +1157,7 @@
       input.disabled = !p.enabled;
       input.setAttribute('data-ap-input', p.name);
       // listeners capture these constants; two views with the same signature can share one DOM node (see morph)
-      wrap.setAttribute('data-aps', [v.c, p.name, change || '', submit || '', design ? 'd' : ''].join('|'));
+      wrap.setAttribute('data-aps', [v.c, p.name, evKey(change), evKey(submit), design ? 'd' : ''].join('|'));
       return wrap;
     }
 
@@ -1174,14 +1185,16 @@
     }
     function morphNode(o, n) {
       if (o.nodeType === 3) { if (o.nodeValue !== n.nodeValue) o.nodeValue = n.nodeValue; return; }
+      var t = o.tagName;
+      // read form state first: morphing the children moves the options out of `n`, which would blank a <select>'s value
+      var nValue = (t === 'INPUT' || t === 'SELECT') ? n.value : null, nChecked = t === 'INPUT' ? n.checked : null;
       syncAttrs(o, n);
       morphChildren(o, n);
-      var t = o.tagName;
       if (t === 'INPUT') {
-        if (o.type === 'checkbox') { if (o.checked !== n.checked) o.checked = n.checked; }
-        else if (o.value !== n.value) o.value = n.value;
+        if (o.type === 'checkbox') { if (o.checked !== nChecked) o.checked = nChecked; }
+        else if (o.value !== nValue) o.value = nValue;
       } else if (t === 'SELECT') {
-        if (o.value !== n.value) o.value = n.value;
+        if (o.value !== nValue) o.value = nValue;
       }
     }
     function morphChildren(o, n) {

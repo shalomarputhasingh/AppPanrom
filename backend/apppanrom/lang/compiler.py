@@ -329,14 +329,14 @@ class Compiler:
         for p in pos_spec[len(st["args"]):]:
             if p["required"] and p["name"] not in st["kw"]:
                 self.error(st, f"{name} is missing required argument '{p['name']}'.", "missing_arg", spec["doc"])
-        events: dict[str, str] = {}
+        events: dict[str, object] = {}
         style = None
         for k, v in st["kw"].items():
             kpos = st["kw_pos"][k]
             if k == "style":
                 style = self._style(v, spec["style_groups"], scope, name)
             elif k in spec["events"]:
-                events[k] = self._handler(v, k)
+                events[k] = self._handler(v, k, scope)
             elif k in spec["kwargs"]:
                 props[k] = self._typed(v, spec["kwargs"][k], scope, f"{name} option '{k}'")
             elif k in [p["name"] for p in pos_spec]:
@@ -356,16 +356,28 @@ class Compiler:
             out["children"] = children
         return out
 
-    def _handler(self, node: dict, event: str) -> str:
+    def _handler(self, node: dict, event: str, scope: set[str] | None = None) -> object:
+        """`click_pannumbodhu=name` (no arguments) or `click_pannumbodhu=name(a, b)` (arguments are evaluated when the screen is drawn,
+        so each item of a list can have its own action, e.g. delete_item(i))."""
+        if node["t"] == "call":
+            if node.get("kw"):
+                self.error(node, f"{event}: use plain positional arguments, e.g. {event}={node['f']}(i).", "bad_handler")
+            fn = self.functions.get(node["f"])
+            if fn is None:
+                self.error(node, f"Handler function '{node['f']}' is not defined.", "undefined_handler",
+                           self.suggest(node["f"], self.functions) or f"Define it: function {node['f']}(...):")
+            elif len(fn["params"]) != len(node["args"]):
+                self.error(node, f"Handler '{node['f']}' takes {len(fn['params'])} argument(s) but {event} passes {len(node['args'])}.", "handler_params")
+            return {"fn": node["f"], "args": [self._expr(a, scope if scope is not None else set(), "screen") for a in node["args"]]}
         if node["t"] != "name":
-            self.error(node, f"{event} must be the name of a function, e.g. {event}=welcome (no quotes, no parentheses).", "bad_handler")
+            self.error(node, f"{event} must be a function name, e.g. {event}=welcome, or a call with arguments, e.g. {event}=delete_item(i).", "bad_handler")
             return ""
         fn = self.functions.get(node["n"])
         if fn is None:
             self.error(node, f"Handler function '{node['n']}' is not defined.", "undefined_handler",
                        self.suggest(node["n"], self.functions) or f"Define it: function {node['n']}():")
         elif fn["params"]:
-            self.error(node, f"Handler '{node['n']}' must take no parameters.", "handler_params")
+            self.error(node, f"Handler '{node['n']}' takes {len(fn['params'])} parameter(s); pass them: {event}={node['n']}(...).", "handler_params")
         return node["n"]
 
     def _typed(self, node: dict, expected: str, scope: set[str], what: str) -> dict:
@@ -391,7 +403,10 @@ class Compiler:
 
     def _style(self, node: dict, groups: list[str], scope: set[str], comp: str) -> dict | None:
         if node["t"] != "dict":
-            self.error(node, 'style must be a dictionary literal, e.g. style={"padding": 16}.', "bad_style")
+            if node["t"] in ("call", "name", "index"):
+                # a computed style, e.g. style=card_style(color): its keys and values are validated by the runtime when drawn
+                return self._expr(node, scope, "screen")
+            self.error(node, 'style must be a dictionary, e.g. style={"padding": 16} or style=my_style().', "bad_style")
             return None
         allowed = self._allowed_style_keys(groups)
         defs = self.spec["styles"]

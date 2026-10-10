@@ -287,3 +287,29 @@ def test_designer_keeps_a_tanglish_file_in_tanglish():
     out = apply_op(src, {"kind": "insert", "type": "button", "target_line": 5, "position": "after"})["source"]
     assert "batan(" in out and "button(" not in out
     assert compile_source(out).ok
+
+
+def test_handlers_with_arguments_are_checked():
+    base = 'mari items = ["a"]\nfunction del_item(i):\n    remove(items, i)\nfunction plain():\n    summa\nscreen_uruvakku("home"):\n    ovvoru i in range(length(items)):\n        button("x", click_pannumbodhu=%s)\n'
+    assert compile_source(base % "del_item(i)").ok
+    assert compile_source(base % "plain").ok
+    for bad, code in [("del_item", "handler_params"), ("del_item(i, 1)", "handler_params"), ("plain(i)", "handler_params"), ("nope(i)", "undefined_handler"), ("del_item(k)", "undefined_variable")]:
+        assert code in [d.code for d in compile_source(base % bad).diagnostics], bad
+
+
+def test_flagship_machan_app_is_tanglish_and_equivalent_in_english():
+    import json
+    from apppanrom.lang.tanglish import detect_style, to_english
+
+    def strip(o):
+        if isinstance(o, dict):
+            return {k: strip(v) for k, v in o.items() if k not in ("pos", "kw_pos")}
+        return [strip(x) for x in o] if isinstance(o, list) else o
+
+    ta = (SAMPLE.parents[1] / "examples" / "machan.apn").read_text()
+    assert detect_style(ta) == "tanglish" and "seyal " in ta and "thirumbi_kudu" in ta and "batan(" in ta
+    en = to_english(ta)
+    a, b = compile_source(ta), compile_source(en)
+    assert a.ok and b.ok and not a.diagnostics
+    assert json.dumps(strip(a.ir), sort_keys=True) == json.dumps(strip(b.ir), sort_keys=True)
+    assert sorted(a.ir["permissions"]) == sorted(["VIBRATE"]) or a.ir["permissions"]

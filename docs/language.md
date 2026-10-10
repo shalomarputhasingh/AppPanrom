@@ -42,6 +42,38 @@ App settings are validated: application id `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+
 keywords), version `MAJOR.MINOR.PATCH` (each 0-999), theme `light` or `dark`. Values in `main.apn` override the
 project settings made in the Studio; the Studio values are the defaults. **All** of these go into the APK.
 
+## 1b. Tanglish vocabulary
+
+Every English word of the language has a spoken-Tamil name. Both forms are always valid and can be mixed; the compiler maps the Tanglish names to the
+canonical ones before parsing, so the program is identical. The Studio's **Settings → Language** converts a whole file either way (strings and
+comments are never touched), the designer keeps writing in the vocabulary your file uses, and error hints can be shown in Tanglish.
+The Tanglish names are reserved (you cannot use them as your own variable or function names).
+
+| English | Tanglish | | English | Tanglish |
+|---|---|---|---|---|
+| `function` | `seyal` | | `true` / `false` / `null` | `sari` / `thappu` / `onnum_illa` |
+| `return` | `thirumbi_kudu` | | `and` / `or` / `not` | `matrum` / `allathu` / `illaadha` |
+| `try` / `catch` | `muyarchi` / `pidi` | | `in` | `ulle` |
+| `title` | `thalaippu` | | `button` | `batan` |
+| `password_input` | `ragasiya_input` | | `number_input` | `ennai_input` |
+| option `label` | `peyar` | | option `placeholder` | `kurippu` |
+| option `initial` | `modhal` | | option `enabled` | `iyakkam` |
+| option `options` | `thervugal` | | option `alt` | `vilakkam` |
+| `int` / `float` / `str` / `bool` | `muzhu_ennai` / `thasama_ennai` / `text_aakku` / `unmai_ah` | | `type_of` | `vagai` |
+| `text_length` | `text_neelam` | | `text_upper` / `text_lower` | `text_peria_ezhuthu` / `text_chinna_ezhuthu` |
+| `text_trim` | `text_suththam` | | `text_replace` | `text_maathu` |
+| `text_split` / `text_join` | `text_pirichu` / `text_serthu` | | `text_contains` | `text_irukka` |
+| `length` | `neelam` | | `append` / `remove` | `serthu` / `neekku` |
+| `sort` | `varisai_paduthu` | | `range` | `ellai` |
+| `dict_get` / `dict_keys` | `dict_edu` / `dict_saavigal` | | `min` / `max` / `sum` | `kuraivu` / `athigam` / `kootu` |
+| `round` / `abs` | `suththam_pannu` / `nermai` | | `json_encode` / `json_decode` | `json_aakku` / `json_padi` |
+| `now_iso` | `ippo` | | `random_number` / `random_choice` | `random_ennai` / `random_edu` |
+| `debug_log` | `pathivu_pannu` | | | |
+
+Everything else was already Tanglish (`mari`, `enna_na`, `illana_enna`, `illana`, `ovvoru`, `irukkura_varai`, `summa`, `text_kaattu`, `message_kaattu`,
+`data_save_pannu`, `screen_ku_poo`, `click_pannumbodhu`, ...). Style keys (`background`, `padding`, ...) and their values stay English.
+`examples/machan.apn` is a complete app written in this vocabulary.
+
 ## 2. Lexical rules
 
 * Indentation is **4 spaces per level**. Tabs and other widths are errors. A block follows a line ending in `:`.
@@ -105,7 +137,7 @@ event** (button, input change, navigation); drawing must be pure: it may read va
 may not assign globals or call functions that change state (`message_kaattu`, `toast_kaattu`, `input_set`, `clipboard_copy`, `vibrate_pannu`, `data_save_pannu`,
 `data_delete_pannu`, `data_clear_pannu`, `screen_ku_poo`, `screen_back_poo`, `screen_data_set`). Change state in event handlers.
 
-`screen_title(text)` sets the app-bar title (default: the app name). `screen_uruvakku("name", style={...})` accepts a screen style.
+`screen_title(text)` sets the app-bar title (default: the app name). `screen_uruvakku("name", style={...})` accepts a screen style. A component's `style` can also be a **computed dictionary**, e.g. `style=card_style("#FDE68A")`, where `card_style` is a function that returns a style dict (its keys and values are validated when the screen is drawn; invalid ones are ignored with a console warning). That is how one setting can re-skin a whole app.
 
 | Component | Kind | Signature | Events |
 |---|---|---|---|
@@ -129,7 +161,9 @@ may not assign globals or call functions that change state (`message_kaattu`, `t
 | `center_ama` | container (block) | `center_ama(style={}): <block>` | - |
 
 * Required first arguments are positional; everything else is `name=value`. Unknown options are errors.
-* **Events** take the *name* of a zero-parameter function: `click_pannumbodhu=welcome` (no quotes, no parentheses).
+* **Events** take the *name* of a zero-parameter function: `click_pannumbodhu=welcome` (no quotes, no parentheses), **or a call with arguments**:
+  `click_pannumbodhu=delete_item(i)`. The arguments are evaluated when the screen is drawn, so every item of a loop carries its own value
+  (`ovvoru i in range(length(items))` + `button("x", click_pannumbodhu=delete_item(i))`). The function must take exactly that many parameters.
   Handlers run when the user acts; errors inside them are logged with line/column and never crash the app.
   `change_aagumbodhu` fires on every edit (checkbox/toggle/dropdown: on change). `submit_pannumbodhu` fires on Enter.
 * **Inputs.** The first argument is a fixed text name. `input_value(name)` reads it (text; number for `number_input` or

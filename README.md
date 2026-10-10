@@ -40,6 +40,11 @@ screen_uruvakku("home"):
 | Diagnostics with file/line/column + suggestions | ✅ |
 | Components: title, text, button, text/password/number inputs, checkbox, toggle, dropdown, image, list, progress, loading, divider, card, column, row, center | ✅ |
 | Layout + validated, component-scoped styles; light/dark theme; gradients; **looks**: claymorphism, glassmorphism, neumorphism, neo-brutalism, minimal; `shadow` | ✅ (see language doc) |
+| **Tanglish vocabulary**: `seyal`, `thirumbi_kudu`, `muyarchi/pidi`, `sari/thappu`, `batan`, `text_neelam`… for every English word; one-click file conversion; Tanglish error hints | ✅ (see docs/language.md §1b) |
+| **Settings menu that edits the code**: app name/id/version/theme/start screen, screens (add/rename/delete, references updated), global variables, vocabulary | ✅ every control is a text edit of `main.apn` |
+| **Hot reload**: edits appear in the running preview without reloading it; variables, inputs and current screen are kept, only changed components are patched | ✅ |
+| Handlers with arguments (`click_pannumbodhu=neekku_velai(i)`) and computed styles (`style=box(...)`) | ✅ |
+| **Flagship app** `examples/machan.apn` (Machan Planner): 6 screens, tasks, expenses, dialogues, game, storage, 5 looks + dark mode, animations, in Tanglish | ✅ tested (runtime + Chromium); APK built |
 | **Animations** (`animate`: fade/slide/zoom/pop/bounce/shake/pulse/float/spin, duration, delay), screen transitions, press feedback; respects reduce-motion | ✅ |
 | **Fast redraws**: the screen is patched in place (unchanged subtrees skipped), so typing keeps focus and animations don't restart | ✅ measured: 7.8 → 1.2 ms per keystroke on a 450-node screen (Chromium, script time only) |
 | Studio styling UX: one-click look presets, palettes, sliders, grouped Inspector, screen themes (gradients), project templates, light/dark toggle, shortcuts help | ✅ |
@@ -201,7 +206,7 @@ published app) and never commit them.
 | Release buttons are disabled | The three `APPANROM_KEYSTORE*` variables were not set when the server started |
 
 Development mode with hot reload (two terminals): `make dev-backend` (API on :8000) and `make dev-frontend` (Studio on :5173).
-Press **▶ Run** (or Ctrl+Enter) to compile and preview. Sample programs are in `examples/` and in the Studio's **Reference → Examples**. `examples/showcase.apn` demonstrates every look and animation. `examples/calculator.apn` + `examples/calculator-icon.png` is a full colourful calculator app (upload the PNG in Settings → App icon, then build).
+Press **▶ Run** (or Ctrl+Enter) to compile and preview. Sample programs are in `examples/` and in the Studio's **Reference → Examples**. `examples/showcase.apn` demonstrates every look and animation, and `examples/machan.apn` is a complete Tanglish app (its icon is `machan-icon.png`). `examples/calculator.apn` + `examples/calculator-icon.png` is a full colourful calculator app (upload the PNG in Settings → App icon, then build).
 
 ### Configuration (environment variables)
 

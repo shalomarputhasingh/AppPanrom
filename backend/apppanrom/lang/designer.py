@@ -545,9 +545,14 @@ def _op_set_event(program, lines, source, op):
     if fn is None:
         node["kw"].pop(ev, None)
     else:
-        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", str(fn)):
-            raise DesignError("Invalid function name.", "bad_name")
-        node["kw"][ev] = {"t": "name", "n": fn, "pos": [0, 0]}
+        text = str(fn).strip()
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", text):
+            node["kw"][ev] = {"t": "name", "n": text, "pos": [0, 0]}
+        else:  # a handler call with arguments, e.g. delete_item(i)
+            expr = parse_expression(text)
+            if expr["t"] != "call" or expr.get("kw"):
+                raise DesignError("A handler is a function name or a call like delete_item(i).", "bad_name")
+            node["kw"][ev] = expr
     return _replace_header(lines, node, header_text(node, _indent_of(node))), node["pos"][0]
 
 

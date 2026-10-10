@@ -347,3 +347,19 @@ test('setScreen shows a specific screen for design tooling', () => {
   assert.equal(rt.render().children[0].props.text, 'B');
   assert.equal(rt.setScreen('zzz'), false);
 });
+
+test('handlers with arguments: each list item carries its own values, evaluated when the screen is drawn', () => {
+  const { rt, logs } = boot(wrap(
+    'mari items = ["a", "b", "c"]\nmari log = ""\nfunction del_item(i):\n    remove(items, i)\nfunction note(i, label):\n    log = log + label + str(i) + ";"',
+    '    ovvoru i in range(length(items)):\n        button(items[i], click_pannumbodhu=del_item(i))\n        button("n" + items[i], click_pannumbodhu=note(i, "x"))\n    text_kaattu(log)',
+  ));
+  let v = rt.render();
+  const btns = () => flat(rt.render()).filter((n) => n.c === 'button');
+  assert.deepEqual(btns().map((b) => b.props.label), ['a', 'na', 'b', 'nb', 'c', 'nc']);
+  assert.deepEqual(btns()[2].events.click_pannumbodhu, { fn: 'del_item', args: [1] });
+  rt.fire(btns()[2].events.click_pannumbodhu); // delete "b" using the values captured when drawn
+  assert.deepEqual(btns().map((b) => b.props.label), ['a', 'na', 'c', 'nc']);
+  rt.fire(btns()[3].events.click_pannumbodhu);
+  assert.ok(flat(rt.render()).some((n) => n.props.text === 'x1;'));
+  assert.deepEqual(logs.filter((l) => l.level === 'error'), []);
+});

@@ -192,15 +192,23 @@ function EventRow({ ev, fn, node, disabled, onOp, onGoto, onCreateHandler }: {
   const { error, run } = useOp(onOp);
   const [err2, setErr2] = useState<string | null>(null);
   const [naming, setNaming] = useState(false);
+  const [calling, setCalling] = useState(false);
   const [name, setName] = useState('');
   const NEW = '__new__';
   const create = async () => {
     setErr2(await onCreateHandler(name.trim(), ev));
     setNaming(false);
   };
+  const isCall = !!fn && fn.includes('(');
   return (
     <Row name={ev} error={error || err2}>
-      {naming ? (
+      {(isCall || calling) ? (
+        <>
+          <CommitInput mono aria-label={`${label(ev)} (call with arguments)`} value={fn ?? ''} disabled={disabled} placeholder="delete_item(i)"
+            onCommit={(t) => { setCalling(false); void run({ kind: 'set_event', line: node.line, event: ev, function: t.trim() || null }); }} />
+          <button className="btn small" title="Use a plain handler instead" onClick={() => { setCalling(false); void run({ kind: 'set_event', line: node.line, event: ev, function: null }); }}>×</button>
+        </>
+      ) : naming ? (
         <>
           <input autoFocus aria-label="New handler name" className="mono" value={name} onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') void create(); if (e.key === 'Escape') setNaming(false); }} placeholder="my_handler" />
@@ -210,6 +218,7 @@ function EventRow({ ev, fn, node, disabled, onOp, onGoto, onCreateHandler }: {
         <>
           <select aria-label={label(ev)} disabled={disabled} value={fn ?? ''}
             onChange={(e) => {
+              if (e.target.value === '__call__') { setCalling(true); return; }
               if (e.target.value === NEW) { setName(`${node.component.replace(/_.*$/, '')}_${ev.split('_')[0]}ed`.replace('buttoned', 'button_clicked')); setNaming(true); return; }
               void run({ kind: 'set_event', line: node.line, event: ev, function: e.target.value || null });
             }}>
@@ -217,6 +226,7 @@ function EventRow({ ev, fn, node, disabled, onOp, onGoto, onCreateHandler }: {
             {fn && !node.handlers.includes(fn) && <option value={fn}>{fn} (not a valid handler)</option>}
             {node.handlers.map((h) => <option key={h} value={h}>{h}</option>)}
             <option value={NEW}>＋ New handler…</option>
+            <option value="__call__">ƒ Call with arguments…</option>
           </select>
           {fn && node.handler_lines[fn] && <button className="btn small" onClick={() => onGoto(node.handler_lines[fn])} title="Show this function in the code">Code</button>}
         </>
