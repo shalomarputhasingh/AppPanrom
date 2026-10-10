@@ -65,8 +65,7 @@ Verified **for real** (Android SDK 34 / build-tools 34.0.0 from dl.google.com, J
 * `backend/tests/test_real_build.py` automates the above (runs only when `ANDROID_HOME` is set) and is the `android-build` job in
   `.github/workflows/ci.yml`. That workflow file has **not been run on GitHub yet**; the commands in it were run by hand here.
 
-**Not verified:** installing or launching the APK on a device or emulator (this environment has no KVM and no emulator, so the WebView
-behaviour on Android, the real launcher icon and the runtime permission behaviour are untested on hardware); Play Store acceptance of the AAB;
+**Device test:** the maintainer installed the Vanakkam example's debug APK on a real Android phone and reported it ran without errors (reported by the user, not automated). **Not verified:** the release APK/AAB on a device, the permissions-test app on a device, any emulator run (this environment has no KVM); Play Store acceptance of the AAB;
 release APKs have shortened resource paths (e.g. `res/o-.png` for the icon), which is normal AGP behaviour but was only inspected, not exercised.
 
 Practical notes from the real runs: the first build downloads ~hundreds of MB of dependencies and takes 2-4 minutes. Maven Central may answer
@@ -95,25 +94,110 @@ Under the hood each action is a small text edit (`backend/apppanrom/lang/designe
 components are regenerated from the AST, everything else (comments, formatting, other code) is untouched, and the result is re-parsed before it is
 accepted. Randomised tests apply hundreds of edits and check the file always stays valid.
 
-## Quick start
+## Local setup (your own PC)
 
-Prerequisites: Python 3.11+, Node 18+ (tested with Python 3.13 / Node 22). For APK builds also: JDK 17+, Gradle 8.7+,
-Android SDK (see below).
+### 1. Install the tools
+
+| Tool | Version | Needed for | Get it |
+|---|---|---|---|
+| Python | 3.11+ | backend / compiler | python.org (Windows: tick "Add to PATH") |
+| Node.js | 18+ | Studio (frontend) | nodejs.org |
+| Git | any | cloning | git-scm.com |
+| JDK | 17+ | APK builds only | e.g. Temurin from adoptium.net (`java -version` must work) |
+| Gradle | 8.7+ (tested 8.14.3) | APK builds only | gradle.org/install (or SDKMAN / Homebrew / Scoop) |
+| Android SDK | platform 34, build-tools 34.0.0 | APK builds only | below |
+
+You can use the Studio, editor, designer and preview with just Python and Node. JDK, Gradle and the SDK are only for building an APK.
+
+### 2. Get the code and start the Studio
 
 ```bash
-make setup                   # pip install backend deps, npm install frontend
-make serve                   # builds the Studio and serves everything at http://127.0.0.1:8000
+git clone https://github.com/shalomarputhasingh/AppPanrom.git
+cd AppPanrom
+
+# macOS / Linux (needs make)
+make setup          # installs backend + frontend dependencies
+make serve          # builds the Studio and serves it at http://127.0.0.1:8000
 ```
 
-Development mode (hot reload), two terminals:
+Windows (PowerShell) or no `make` - the same steps by hand:
+
+```powershell
+pip install -r backend/requirements-dev.txt
+cd frontend; npm install; npm run build; cd ..
+cd backend
+python -m uvicorn apppanrom.main:create_app --factory --port 8000
+```
+
+Open <http://127.0.0.1:8000>, create a project, press **Run** (Ctrl+Enter) to preview. Projects, builds and APKs are stored in `./data`
+(or `APPANROM_DATA_DIR`), which is not committed. Run the server from the `backend` folder; if you change the frontend, rebuild it
+(`npm run build`) and restart the server.
+
+### 3. Install the Android SDK (no Android Studio needed)
+
+1. Download "Command line tools only" from <https://developer.android.com/studio#command-line-tools-only> and unzip it so that the
+   path is `<SDK>/cmdline-tools/latest/bin/sdkmanager` (`<SDK>` e.g. `~/android-sdk` or `C:\Android\sdk`). The `latest` folder level matters.
+2. Install the packages and accept the licences:
 
 ```bash
-make dev-backend             # API on :8000   (uvicorn apppanrom.main:create_app --factory)
-make dev-frontend            # Studio on :5173 (proxies /api to :8000)
+<SDK>/cmdline-tools/latest/bin/sdkmanager --licenses
+<SDK>/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 ```
 
-Press **▶ Run** (or Ctrl+Enter) to compile and preview. Sample programs are in `examples/` and in the Studio's
-**Reference → Examples**.
+(On Windows use `sdkmanager.bat`.) If you already have Android Studio, its SDK works too; just make sure those two packages are installed.
+
+### 4. Tell AppPanrom where things are, then restart the server
+
+```bash
+# macOS / Linux
+export ANDROID_HOME=~/android-sdk
+export GRADLE_BIN=/path/to/gradle/bin/gradle     # only if `gradle` is not on PATH
+```
+
+```powershell
+# Windows PowerShell
+$env:ANDROID_HOME = "C:\Android\sdk"
+$env:GRADLE_BIN = "C:\gradle\bin\gradle.bat"    # only if gradle is not on PATH
+```
+
+Start the server **from the same terminal** (variables are per terminal). In the Studio, **Build** shows green checks for Java, Gradle and
+the Android SDK; anything missing is listed with the fix. Then **Build Debug APK**, wait 2-5 minutes on the first build (it downloads
+dependencies from Google Maven / Maven Central; you need internet), and **Download**.
+
+### 5. Install the APK on your phone
+
+* Send the `.apk` to the phone (cable, cloud drive, chat), open it and allow "install unknown apps" for that app when Android asks; or
+* USB debugging on, then `adb install -r app-debug.apk` (`adb` is in `<SDK>/platform-tools`).
+
+Debug APKs are signed with the Android debug key: fine for testing, not for the Play Store.
+
+### 6. (Optional) Signed release APK / AAB for the Play Store
+
+```bash
+cd backend
+python -m apppanrom.cli make-keystore ~/keys/myapp.jks --alias release     # asks for a password; needs keytool (comes with the JDK)
+export APPANROM_KEYSTORE=~/keys/myapp.jks APPANROM_KEY_ALIAS=release
+export APPANROM_KEYSTORE_PASSWORD='your-password'                          # PowerShell: $env:NAME = "value"
+python -m uvicorn apppanrom.main:create_app --factory --port 8000
+```
+
+Then choose *Release APK* or *Release AAB* in **Build**. **Back up the keystore and password** (without them you can never update a
+published app) and never commit them.
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| Build tab says Java / Gradle / Android SDK not ready | Follow the "fix" text shown; check `java -version`, `gradle -v`, and that `ANDROID_HOME` was exported in the terminal that started the server |
+| `sdkmanager` says it cannot find the SDK root | The unzipped folder must be `cmdline-tools/latest/...`, not `cmdline-tools/cmdline-tools/...` |
+| Gradle: "Could not GET ... 429" or timeouts | Network / Maven rate limit; just press Build again, it resumes from what was downloaded. Behind a proxy set `HTTPS_PROXY` |
+| Build fails with "Unsupported class file major version" | JDK too new/old for Gradle; use JDK 17 or 21 |
+| Studio page is blank / 404 at `/` | Frontend not built: `cd frontend && npm run build`, then restart the server |
+| `pip` / `python` not found on Windows | Use `py -m pip` / `py -m uvicorn`, or reinstall Python with "Add to PATH" |
+| Release buttons are disabled | The three `APPANROM_KEYSTORE*` variables were not set when the server started |
+
+Development mode with hot reload (two terminals): `make dev-backend` (API on :8000) and `make dev-frontend` (Studio on :5173).
+Press **▶ Run** (or Ctrl+Enter) to compile and preview. Sample programs are in `examples/` and in the Studio's **Reference → Examples**.
 
 ### Configuration (environment variables)
 
@@ -132,12 +216,10 @@ other secrets in your environment are not.
 
 ## Building an APK
 
-1. Install JDK 17+, Gradle 8.7+, and the Android SDK command-line tools, then:
-   `sdkmanager "platforms;android-34" "build-tools;34.0.0"` and accept licences (`sdkmanager --licenses`).
-2. `export ANDROID_HOME=/path/to/sdk` (and `GRADLE_BIN` if `gradle` isn't on `PATH`) before starting the backend.
-3. In the Studio open **Build → Build debug APK**. The panel shows what is missing if prerequisites aren't met,
-   streams the real Gradle log, and offers **Download** only for a verified APK.
-4. Or by hand: `cd backend && python3 -m apppanrom.cli android-project ../examples/vanakkam.apn /tmp/myapp`, then open
+Set up the JDK, Gradle and Android SDK as described in [Local setup](#local-setup-your-own-pc), then open **Build → Build debug APK** in the Studio.
+The panel shows what is missing if prerequisites aren't met, streams the real Gradle log, and offers **Download** only for a verified APK.
+
+By hand: `cd backend && python3 -m apppanrom.cli android-project ../examples/vanakkam.apn /tmp/myapp`, then open
    `/tmp/myapp` in Android Studio or run `gradle assembleDebug` there.
 
 Application id, version, app name and theme flow from `main.apn` / project settings into `build.gradle`, the manifest
