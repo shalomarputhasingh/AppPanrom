@@ -350,7 +350,7 @@ def _errors(source: str) -> list:
     return [d for d in r.diagnostics if d.severity == "error"]
 
 
-CHECKED_KINDS = ("set_prop", "set_style", "set_styles", "set_event", "set_app", "add_global", "set_global", "delete_global", "rename_screen", "delete_screen", "navbar_all", "tabs_all")
+CHECKED_KINDS = ("set_prop", "set_style", "set_styles", "reset_style", "set_event", "set_app", "add_global", "set_global", "delete_global", "rename_screen", "delete_screen", "navbar_all", "tabs_all")
 
 
 def apply_op(source: str, op: dict) -> dict:
@@ -363,7 +363,7 @@ def apply_op(source: str, op: dict) -> dict:
     lines, _ = _split(source)
     fn = {
         "insert": _op_insert, "move": _op_move, "delete": _op_delete, "duplicate": _op_duplicate,
-        "set_prop": _op_set_prop, "set_style": _op_set_style, "set_styles": _op_set_styles, "set_event": _op_set_event,
+        "set_prop": _op_set_prop, "set_style": _op_set_style, "set_styles": _op_set_styles, "reset_style": _op_reset_style, "set_event": _op_set_event,
         "add_screen": _op_add_screen, "create_handler": _op_create_handler,
         "set_app": _op_set_app, "add_global": _op_add_global, "set_global": _op_set_global, "delete_global": _op_delete_global,
         "rename_screen": _op_rename_screen, "delete_screen": _op_delete_screen,
@@ -562,6 +562,13 @@ def _set_style_key(node, key, raw, spec) -> None:
 def _op_set_style(program, lines, source, op):
     node = _style_target(program, op).node
     _set_style_key(node, op.get("key"), op.get("value"), load_spec())
+    return _replace_header(lines, node, header_text(node, _indent_of(node))), node["pos"][0]
+
+
+def _op_reset_style(program, lines, source, op):
+    """Removes a component's style entirely (also a computed one such as style=card_style()), so it can be styled visually again."""
+    node = _style_target(program, op).node
+    node["kw"].pop("style", None)
     return _replace_header(lines, node, header_text(node, _indent_of(node))), node["pos"][0]
 
 
@@ -910,7 +917,7 @@ def describe(source: str, line: int) -> dict:
         return {
             "kind": "screen", "component": "screen_uruvakku", "line": line, "container": True,
             "props": {}, "events": {}, "style": {_key_text(k): _describe_value(v) for k, v in style["items"]} if style and style["t"] == "dict" else {},
-            "style_dynamic": bool(style and style["t"] != "dict"),
+            "style_dynamic": bool(style and style["t"] != "dict"), "style_expr": unparse(style) if style and style["t"] != "dict" else None,
             "allowed": {"props": [], "events": [], "style": keys}, "handlers": handlers, "handler_lines": handler_lines,
             "name": node["args"][0]["v"] if node["args"] else "",
         }
@@ -932,7 +939,7 @@ def describe(source: str, line: int) -> dict:
         "kind": "component", "component": node["f"], "line": line, "container": is_container(node),
         "props": props, "events": events,
         "style": {_key_text(k): _describe_value(v) for k, v in style["items"]} if style and style["t"] == "dict" else {},
-        "style_dynamic": bool(style and style["t"] != "dict"),
+        "style_dynamic": bool(style and style["t"] != "dict"), "style_expr": unparse(style) if style and style["t"] != "dict" else None,
         "allowed": {"props": allowed_props, "events": cspec["events"], "style": keys},
         "handlers": handlers, "handler_lines": handler_lines,
     }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api } from '../api';
 import type { AppPermission, DesignNodeInfo, DesignTree, Diagnostic, DropInfo, LogLine, Project, Spec } from '../types';
 import { BuildPanel } from './BuildPanel';
@@ -6,7 +6,11 @@ import { ConsolePanel } from './ConsolePanel';
 import { DesignCanvas, type CanvasHandle } from './DesignCanvas';
 import { Inspector } from './Inspector';
 import { Outline } from './Outline';
-import { Palette } from './Palette';
+import { Palette, GROUPS as PALETTE_GROUPS } from './Palette';
+import { CommandPalette, type Command } from './CommandPalette';
+import { FitStage } from './FitStage';
+import { StatusBar } from './StatusBar';
+import { Splitter, useLayout, DEFAULT_LAYOUT } from '../layout';
 import { Dialog } from './Dialog';
 import { DiagnosticsPanel } from './DiagnosticsPanel';
 import { Editor, type EditorHandle } from './Editor';
@@ -43,6 +47,8 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
   const [fileError, setFileError] = useState<string | null>(null);
   const [confirmExample, setConfirmExample] = useState<string | null>(null);
   const [showKeys, setShowKeys] = useState(false);
+  const [palette, setPalette] = useState(false);
+  const [lay, setLay, resetLay] = useLayout();
   const [taMessages, setTaMessages] = useState<boolean>(() => { try { return window.localStorage.getItem('apppanrom.ta') === '1'; } catch { return false; } });
   const setTa = useCallback((v: boolean) => { setTaMessages(v); try { window.localStorage.setItem('apppanrom.ta', v ? '1' : '0'); } catch { /* ignore */ } }, []);
   const [confirmDeleteFile, setConfirmDeleteFile] = useState<string | null>(null);
@@ -187,6 +193,9 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
     const on = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); void run(); }
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); void doSave(); }
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPalette(true); }
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') { e.preventDefault(); setLay({ sideOpen: !lay.sideOpen }); }
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') { e.preventDefault(); setLay({ bottomOpen: !lay.bottomOpen }); }
       else if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
         const t = e.target as HTMLElement | null;
         if (!t || !(t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) { e.preventDefault(); setShowKeys(true); }
@@ -194,11 +203,20 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
     };
     window.addEventListener('keydown', on);
     return () => window.removeEventListener('keydown', on);
-  }, [run, doSave]);
+  }, [run, doSave, lay.sideOpen, lay.bottomOpen, setLay]);
 
   // ---- designer: every action is a text edit of main.apn; the editor, autosave and compiler pick it up like typing
-  const applyDesignEdit = useCallback(async (op: Record<string, unknown>, quiet = false): Promise<string | null> => {
-    if (syncRef.current !== 'ok') {
+  // Designer edits are serialised: each one starts from the result of the one before it. Without this, two quick edits
+  // (a toggle then a dropdown, a double click...) both start from the same text and whichever response arrives last overwrites the other.
+  const editQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const queued = useCallback(<T,>(job: () => Promise<T>): Promise<T> => {
+    const p = editQueue.current.then(job, job);
+    editQueue.current = p.catch(() => undefined);
+    return p;
+  }, []);
+  const applyDesignEdit = useCallback((op: Record<string, unknown>, quiet = false): Promise<string | null> => queued(async (): Promise<string | null> => {
+    // 'pending' (a re-check of the previous edit) is fine: the server refuses text it cannot parse. Only known compile errors block.
+    if (syncRef.current === 'errors') {
       const m = 'Fix the errors in your code first; the designer needs code that compiles.';
       if (!quiet) setDesignError(m);
       return m;
@@ -220,7 +238,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
       if (!quiet) setDesignError(m);
       return m;
     }
-  }, [projectId, validate]);
+  }), [projectId, validate, queued]);
 
   const getText = useCallback(() => text.current, []);
   /** Rewrites the whole file between the English and the Tanglish vocabulary (one undoable replace). */
@@ -286,8 +304,8 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
   const inspectorOp = useCallback((op: Record<string, unknown>) => { previewSeq.current++; window.clearTimeout(previewTimer.current); return applyDesignEdit({ ...op }, true); }, [applyDesignEdit]);
   const replayAnimation = useCallback(() => { if (selected != null) canvas.current?.replay(selected); }, [selected]);
   /** Creates `function name():` in the code and wires the selected component's event to it, as one visible edit. */
-  const createHandler = useCallback(async (name: string, event: string): Promise<string | null> => {
-    if (syncRef.current !== 'ok' || selected == null) return 'Fix the errors in your code first.';
+  const createHandler = useCallback((name: string, event: string): Promise<string | null> => queued(async (): Promise<string | null> => {
+    if (syncRef.current === 'errors' || selected == null) return 'Fix the errors in your code first.';
     try {
       const a = await api.designEdit(projectId, text.current, { kind: 'create_handler', name });
       const delta = a.source.split('\n').length - text.current.split('\n').length;
@@ -305,7 +323,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
       designEditing.current = false;
       return (e as Error).message;
     }
-  }, [projectId, selected, validate]);
+  }), [projectId, selected, validate, queued]);
 
   const addScreen = async () => {
     const name = (addingScreen ?? '').trim();
@@ -320,7 +338,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
 
   useEffect(() => {
     if (mode !== 'design' || selected == null) { setNodeInfo(null); return; }
-    if (sync !== 'ok') return;
+    if (sync === 'errors') return;
     let live = true;
     api.designNode(projectId, text.current, selected).then(
       (n) => { if (live) { setNodeInfo(n); setBottom((b) => (b === 'console' || b === 'diagnostics' ? 'inspector' : b)); } },
@@ -394,6 +412,37 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
   const errorCount = useMemo(() => diags.filter((d) => d.severity === 'error').length, [diags]);
   const warnCount = diags.length - errorCount;
 
+  const commands = useMemo<Command[]>(() => {
+    const out: Command[] = [
+      { id: 'run', group: 'App', label: 'Run the app', keys: 'Ctrl Enter', run: () => void run() },
+      { id: 'save', group: 'App', label: 'Save', keys: 'Ctrl S', run: () => void doSave() },
+      { id: 'build', group: 'App', label: 'Build debug APK…', hint: 'opens the Build tab', run: () => { setLay({ bottomOpen: true }); setBottom('build'); } },
+      { id: 'projects', group: 'App', label: 'Back to all projects', run: () => { void (async () => { if (await doSave()) onClose(); })(); } },
+      { id: 'mode-run', group: 'View', label: 'Show the live preview', run: () => void enterMode('run') },
+      { id: 'mode-design', group: 'View', label: 'Open the visual designer', run: () => void enterMode('design') },
+      { id: 'side-files', group: 'View', label: 'Side panel: Files', run: () => { setLay({ sideOpen: true }); setSide('files'); } },
+      { id: 'side-design', group: 'View', label: 'Side panel: Components & outline', run: () => { setLay({ sideOpen: true }); setSide('design'); } },
+      { id: 'side-settings', group: 'View', label: 'Side panel: Settings (app, screens, top bar, language)', run: () => { setLay({ sideOpen: true }); setSide('settings'); } },
+      { id: 'side-docs', group: 'View', label: 'Side panel: Docs & examples', run: () => { setLay({ sideOpen: true }); setSide('reference'); } },
+      { id: 'toggle-side', group: 'View', label: 'Toggle the side panel', keys: 'Ctrl B', run: () => setLay({ sideOpen: !lay.sideOpen }) },
+      { id: 'toggle-bottom', group: 'View', label: 'Toggle the bottom panel', keys: 'Ctrl J', run: () => setLay({ bottomOpen: !lay.bottomOpen }) },
+      { id: 'zoom-fit', group: 'View', label: 'Phone: fit to panel', run: () => setLay({ zoom: 'fit' }) },
+      { id: 'zoom-100', group: 'View', label: 'Phone: real size (100%)', run: () => setLay({ zoom: '100' }) },
+      { id: 'layout-reset', group: 'View', label: 'Reset panel sizes', run: resetLay },
+      { id: 'tab-console', group: 'Panels', label: 'Show the console', run: () => { setLay({ bottomOpen: true }); setBottom('console'); } },
+      { id: 'tab-diag', group: 'Panels', label: 'Show problems (diagnostics)', run: () => { setLay({ bottomOpen: true }); setBottom('diagnostics'); } },
+      { id: 'theme', group: 'Studio', label: 'Cycle the Studio theme (auto / light / dark)', run: () => document.querySelector<HTMLButtonElement>('[data-testid=theme-toggle]')?.click() },
+      { id: 'keys', group: 'Studio', label: 'Keyboard shortcuts', keys: '?', run: () => setShowKeys(true) },
+      { id: 'tanglish', group: 'Language', label: 'Convert the code to Tanglish', run: () => void convertCode('tanglish') },
+      { id: 'english', group: 'Language', label: 'Convert the code to English', run: () => void convertCode('english') },
+    ];
+    if (mode === 'design') {
+      PALETTE_GROUPS.forEach((g) => g.items.forEach((it) => out.push({ id: `add-${it.type}`, group: 'Add component', label: `Add ${it.label}`, hint: g.title, disabled: sync === 'errors', run: () => addFromPalette(it.type) })));
+    }
+    (tree?.screens ?? []).forEach((n) => out.push({ id: `screen-${n}`, group: 'Go to screen', label: n, disabled: mode !== 'design', run: () => canvas.current?.setScreen(n) }));
+    return out;
+  }, [run, doSave, enterMode, lay.sideOpen, lay.bottomOpen, mode, sync, tree, setLay, resetLay, convertCode, addFromPalette, onClose]);
+
   if (loadError) {
     return (
       <main className="center-screen"><p className="error-text" role="alert">{loadError}</p><button className="btn" onClick={onClose}>Back to projects</button></main>
@@ -403,14 +452,19 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
 
   const saveLabel = { saved: 'All changes saved', dirty: 'Unsaved changes', saving: 'Saving…', error: 'Save failed' }[save];
   return (
-    <div className="workspace">
+    <div className={`workspace ${lay.sideOpen ? '' : 'side-closed'} ${lay.bottomOpen ? '' : 'bottom-closed'}`}
+      style={{ '--side-w': `${lay.sideOpen ? lay.side : 0}px`, '--prev-w': `${lay.prev}px`, '--bottom-h': `${lay.bottomOpen ? lay.bottom : 34}px` } as CSSProperties}>
       <header className="topbar">
         <button className="btn" onClick={async () => { if (await doSave()) onClose(); }} aria-label="Back to projects">← Projects</button>
+        <button className="btn icon" onClick={() => setLay({ sideOpen: !lay.sideOpen })} title="Show / hide the side panel (Ctrl+B)" aria-label="Toggle side panel" aria-pressed={lay.sideOpen}>☰</button>
         <h1 className="proj-name" title={project.app_id}>{project.name}</h1>
         <span className={`save-state ${save}`} data-testid="save-state" role="status">{saveLabel}</span>
         <div className="spacer" />
+        <button className="btn cmd-btn" onClick={() => setPalette(true)} data-testid="open-palette" title="Search every action (Ctrl+K)">
+          <span aria-hidden>⌕</span> <span className="cmd-text">Search commands</span> <kbd>Ctrl K</kbd>
+        </button>
         <ThemeToggle />
-        <button className="btn" onClick={() => setShowKeys(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">⌨</button>
+        <button className="btn icon" onClick={() => setShowKeys(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">⌨</button>
         <button className="btn" onClick={() => void doSave()} disabled={save === 'saved' || save === 'saving'} title="Save (Ctrl+S)">Save</button>
         <button className="btn primary" onClick={() => void run()} data-testid="run-btn" title="Run (Ctrl+Enter)">▶ Run</button>
         <button className="btn" onClick={() => setBottom('build')} data-testid="goto-build">Build APK</button>
@@ -447,7 +501,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
                 <button className="btn primary" onClick={() => void enterMode('design')} data-testid="open-designer">Open designer</button></div>
             ) : (
               <>
-                <Palette disabled={sync !== 'ok' || file !== MAIN} onAdd={addFromPalette} />
+                <Palette disabled={sync === 'errors' || file !== MAIN} onAdd={addFromPalette} />
                 <h4>Outline</h4>
                 <Outline tree={tree} selected={selected} onSelect={(l) => setSelected(l)} />
               </>
@@ -455,7 +509,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
           )}
           {side === 'settings' && (
             <SettingsPanel project={project} onSaved={(p) => { setProject(p); validate(text.current); }} getText={getText} rev={designIr}
-              onOp={(op) => { previewSeq.current++; window.clearTimeout(previewTimer.current); return applyDesignEdit(op, true); }} onPreview={previewOp} onConvert={convertCode} ready={sync === 'ok'} taMessages={taMessages} setTaMessages={setTa} />
+              onOp={(op) => { previewSeq.current++; window.clearTimeout(previewTimer.current); return applyDesignEdit(op, true); }} onPreview={previewOp} onConvert={convertCode} ready={sync !== 'errors'} taMessages={taMessages} setTaMessages={setTa} />
           )}
           {side === 'reference' && <ReferencePanel spec={spec} onUseExample={(c) => setConfirmExample(c)} />}
         </div>
@@ -473,7 +527,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
             <button role="tab" aria-selected={mode === 'design'} className={mode === 'design' ? 'on' : ''} onClick={() => void enterMode('design')} data-testid="mode-design">✎ Design</button>
           </div>
           {mode === 'run' ? (
-            <PhonePreview state={preview.state} ir={preview.ir} runKey={preview.runKey} projectId={projectId} errorCount={errorCount} codeOk={sync === 'ok'} onLog={log} onRestart={restart} />
+            <PhonePreview zoom={lay.zoom} state={preview.state} ir={preview.ir} runKey={preview.runKey} projectId={projectId} errorCount={errorCount} codeOk={sync === 'ok'} onLog={log} onRestart={restart} />
           ) : (
             <div className="design-pane">
               <div className="design-toolbar">
@@ -482,7 +536,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
                   {(tree?.screens ?? []).map((n) => <option key={n} value={n}>{n}</option>)}
                 </select>
                 {addingScreen === null ? (
-                  <button className="btn small" onClick={() => setAddingScreen('')} disabled={sync !== 'ok'}>+ Screen</button>
+                  <button className="btn small" onClick={() => setAddingScreen('')} disabled={sync === 'errors'}>+ Screen</button>
                 ) : (
                   <form className="row" onSubmit={(e) => { e.preventDefault(); void addScreen(); }}>
                     <input autoFocus aria-label="New screen name" placeholder="details" value={addingScreen} onChange={(e) => setAddingScreen(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setAddingScreen(null)} />
@@ -492,8 +546,8 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
                 <span className="spacer" />
                 <button className="btn small" onClick={() => editor.current?.undo()} title="Undo (also Ctrl+Z in the editor)" aria-label="Undo">↶</button>
                 <button className="btn small" onClick={() => editor.current?.redo()} title="Redo" aria-label="Redo">↷</button>
-                <button className="btn small" onClick={duplicateSelected} disabled={!nodeInfo || nodeInfo.kind !== 'component' || sync !== 'ok'} aria-label="Duplicate" title="Duplicate (Ctrl+D)">⧉</button>
-                <button className="btn small danger-outline" onClick={deleteSelected} disabled={!nodeInfo || nodeInfo.kind !== 'component' || sync !== 'ok'} data-testid="toolbar-delete" aria-label="Delete" title="Delete (Del)">✕</button>
+                <button className="btn small" onClick={duplicateSelected} disabled={!nodeInfo || nodeInfo.kind !== 'component' || sync === 'errors'} aria-label="Duplicate" title="Duplicate (Ctrl+D)">⧉</button>
+                <button className="btn small danger-outline" onClick={deleteSelected} disabled={!nodeInfo || nodeInfo.kind !== 'component' || sync === 'errors'} data-testid="toolbar-delete" aria-label="Delete" title="Delete (Del)">✕</button>
               </div>
               {sync === 'errors' && (
                 <p className="design-banner" role="alert" data-testid="design-stale">
@@ -501,6 +555,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
                 </p>
               )}
               {designError && <p className="design-banner err" role="alert" data-testid="design-error">{designError} <button className="btn small" onClick={() => setDesignError(null)}>Dismiss</button></p>}
+              <FitStage w={340} h={680} zoom={lay.zoom}>
               <div className="phone" data-testid="design-phone">
                 <div className="phone-notch" />
                 <div className={`phone-screen ${sync === 'errors' ? 'stale' : ''}`}>
@@ -511,6 +566,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
                   )}
                 </div>
               </div>
+              </FitStage>
               <p className="muted small center-text">Drag components from the palette. Click to select, drag to move, Delete to remove.</p>
             </div>
           )}
@@ -518,7 +574,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
       </section>
 
       <section className="bottom">
-        <div className="tabs" role="tablist">
+        <div className="tabs" role="tablist" onClick={() => { if (!lay.bottomOpen) setLay({ bottomOpen: true }); }}>
           <button role="tab" aria-selected={bottom === 'console'} className={bottom === 'console' ? 'on' : ''} onClick={() => setBottom('console')}>Console</button>
           <button role="tab" aria-selected={bottom === 'diagnostics'} className={bottom === 'diagnostics' ? 'on' : ''} onClick={() => setBottom('diagnostics')} data-testid="tab-diagnostics">
             Diagnostics {checked && (errorCount > 0 ? <span className="pill err">{errorCount}</span> : warnCount > 0 ? <span className="pill warn">{warnCount}</span> : null)}
@@ -527,17 +583,31 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
             <button role="tab" aria-selected={bottom === 'inspector'} className={bottom === 'inspector' ? 'on' : ''} onClick={() => setBottom('inspector')} data-testid="tab-inspector">Inspector</button>
           )}
           <button role="tab" aria-selected={bottom === 'build'} className={bottom === 'build' ? 'on' : ''} onClick={() => setBottom('build')} data-testid="tab-build">Build</button>
+          <span className="spacer" />
+          <button className="tab-tool" onClick={(e) => { e.stopPropagation(); setLay(lay.bottom < 360 ? { bottom: Math.round(Math.min(520, Math.max(300, window.innerHeight * 0.5))), bottomOpen: true } : { bottom: DEFAULT_LAYOUT.bottom }); }} title="Make this panel taller / back to normal" aria-label="Maximise bottom panel" data-testid="maximise-bottom">⤢</button>
+          <button className="tab-tool" onClick={(e) => { e.stopPropagation(); setLay({ bottomOpen: !lay.bottomOpen }); }} title="Collapse / expand this panel (Ctrl+J)" aria-label={lay.bottomOpen ? 'Collapse bottom panel' : 'Expand bottom panel'} data-testid="toggle-bottom">{lay.bottomOpen ? '▾' : '▴'}</button>
         </div>
-        {bottom === 'console' && <ConsolePanel lines={logs} onClear={() => setLogs([])} />}
-        {bottom === 'diagnostics' && <DiagnosticsPanel tanglish={taMessages} diagnostics={diags} checked={checked} onJump={(d) => editor.current?.jumpTo(d.line, d.col)} />}
-        {bottom === 'inspector' && mode === 'design' && (
-          <Inspector node={nodeInfo} spec={spec} disabled={sync !== 'ok'} onOp={inspectorOp} onPreview={previewOp} onReplay={replayAnimation} onDelete={deleteSelected} onDuplicate={duplicateSelected}
+        {lay.bottomOpen && bottom === 'console' && <ConsolePanel lines={logs} onClear={() => setLogs([])} />}
+        {lay.bottomOpen && bottom === 'diagnostics' && <DiagnosticsPanel tanglish={taMessages} diagnostics={diags} checked={checked} onJump={(d) => editor.current?.jumpTo(d.line, d.col)} />}
+        {lay.bottomOpen && bottom === 'inspector' && mode === 'design' && (
+          <Inspector node={nodeInfo} spec={spec} disabled={sync === 'errors'} onOp={inspectorOp} onPreview={previewOp} onReplay={replayAnimation} onDelete={deleteSelected} onDuplicate={duplicateSelected}
             onGoto={(l) => editor.current?.jumpTo(l, 1)} onCreateHandler={createHandler} />
         )}
-        {bottom === 'build' && <BuildPanel projectId={projectId} ensureSaved={doSave} onProblems={(d) => { setDiags(d); setChecked(true); }}
+        {lay.bottomOpen && bottom === 'build' && <BuildPanel projectId={projectId} ensureSaved={doSave} onProblems={(d) => { setDiags(d); setChecked(true); }}
           permissions={(designIr as { permissions?: AppPermission[] } | null)?.permissions ?? []} />}
       </section>
 
+      <Splitter area="vs1" dir="v" label="Resize side panel" value={lay.side} min={160} max={520} onChange={(v) => setLay({ side: v, sideOpen: true })} onReset={() => setLay({ side: DEFAULT_LAYOUT.side })} />
+      <Splitter area="vs2" dir="v" label="Resize preview panel" value={lay.prev} min={300} max={760} invert onChange={(v) => setLay({ prev: v })} onReset={() => setLay({ prev: DEFAULT_LAYOUT.prev })} />
+      <Splitter area="hs" dir="h" label="Resize bottom panel" value={lay.bottom} min={120} max={640} invert onChange={(v) => setLay({ bottom: v, bottomOpen: true })} onReset={() => setLay({ bottom: DEFAULT_LAYOUT.bottom })} />
+
+      <StatusBar sync={sync === 'pending' ? 'pending' : sync === 'ok' ? 'ok' : 'errors'} errors={errorCount} warnings={warnCount} save={save} saveLabel={saveLabel}
+        live={preview.state === 'ready' && mode === 'run'} vocab={/^\s*(seyal|thirumbi_kudu|batan|thalaippu)\b/m.test(text.current) ? 'Tanglish' : 'English'}
+        screen={tree?.screen ?? null} selected={mode === 'design' && nodeInfo ? `${nodeInfo.kind === 'screen' ? 'screen' : nodeInfo.component} · line ${nodeInfo.line}` : null}
+        zoom={lay.zoom} onZoom={(z) => setLay({ zoom: z })} onDiagnostics={() => { setLay({ bottomOpen: true }); setBottom('diagnostics'); }} onPalette={() => setPalette(true)}
+        onResetLayout={resetLay} />
+
+      {palette && <CommandPalette commands={commands} onClose={() => setPalette(false)} />}
       {showKeys && <ShortcutsDialog onClose={() => setShowKeys(false)} />}
       {confirmExample !== null && (
         <Dialog title="Replace your code?" confirmLabel="Replace" danger onConfirm={() => void useExample(confirmExample)} onCancel={() => setConfirmExample(null)}>

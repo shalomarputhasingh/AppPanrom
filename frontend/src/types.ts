@@ -124,6 +124,7 @@ export interface DesignNodeInfo {
   events: Record<string, string>;
   style: Record<string, DesignValue>;
   style_dynamic: boolean;
+  style_expr?: string | null;
   allowed: { props: { name: string; type: string; required: boolean }[]; events: string[]; style: string[] };
   handlers: string[];
   handler_lines: Record<string, number>;

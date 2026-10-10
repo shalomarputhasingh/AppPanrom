@@ -47,6 +47,7 @@ screen_uruvakku("home"):
 | **Flagship app** `examples/machan.apn` (Machan Planner): 6 screens, tasks, expenses, dialogues, game, storage, 5 looks + dark mode, animations, in Tanglish | ✅ tested (runtime + Chromium); APK built |
 | **Top bar & tabs**: `navbar_uruvakku` (title, subtitle, left/centre/right, back arrow, action buttons, any look; `visible=false` removes it) and `tabbar_uruvakku` + `tab_item` bottom tabs (`screen_maathu`, no back history); Settings → Top bar & tabs applies them to every screen | ✅ |
 | **Live preview of styles**: hover a look, colour, animation or bar look in the Inspector/Settings to see it on the canvas and in the running preview (code untouched), click to apply; ▶ Replay for animations | ✅ |
+| **Workspace UX**: phone auto-fits the panel (Fit / 100%), resizable + collapsible panels remembered between visits, status bar (problems, live state, screen, vocabulary), command palette (Ctrl+K), maximise/collapse bottom panel, serialised designer edits (no lost updates) | ✅ |
 | **Animations** (`animate`: fade/slide/zoom/pop/bounce/shake/pulse/float/spin, duration, delay), screen transitions, press feedback; respects reduce-motion | ✅ |
 | **Fast redraws**: the screen is patched in place (unchanged subtrees skipped), so typing keeps focus and animations don't restart | ✅ measured: 7.8 → 1.2 ms per keystroke on a 450-node screen (Chromium, script time only) |
 | Studio styling UX: one-click look presets, palettes, sliders, grouped Inspector, screen themes (gradients), project templates, light/dark toggle, shortcuts help | ✅ |

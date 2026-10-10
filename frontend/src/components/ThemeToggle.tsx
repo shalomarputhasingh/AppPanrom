@@ -24,11 +24,11 @@ export function ThemeToggle() {
     try { if (mode === 'auto') window.localStorage.removeItem(KEY); else window.localStorage.setItem(KEY, mode); } catch { /* ignore */ }
   }, [mode]);
   const next: Mode = mode === 'auto' ? 'light' : mode === 'light' ? 'dark' : 'auto';
-  const icon = mode === 'auto' ? '◐' : mode === 'light' ? '☀' : '☾';
+  const icon = mode === 'auto' ? 'Auto' : mode === 'light' ? 'Light' : 'Dark';
   return (
     <button className="btn theme-toggle" onClick={() => setMode(next)} data-testid="theme-toggle"
       title={`Studio theme: ${mode}. Click for ${next}.`} aria-label={`Studio theme: ${mode}. Switch to ${next}.`}>
-      {icon} <span className="small">{mode}</span>
+      <span className="small">{icon}</span>
     </button>
   );
 }

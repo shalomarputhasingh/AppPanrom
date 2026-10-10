@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { buildPreviewDoc } from '../previewDoc';
 import type { LogLine } from '../types';
+import { FitStage } from './FitStage';
 
 export type PreviewState = 'empty' | 'loading' | 'error' | 'ready';
 
 interface Props {
+  zoom: 'fit' | '100';
   state: PreviewState;
   ir: unknown;
   runKey: number;
@@ -30,7 +32,7 @@ function saveStore(id: string, data: Record<string, string>) {
   try { localStorage.setItem(storeKey(id), JSON.stringify(data)); } catch { /* storage unavailable: preview data just won't persist */ }
 }
 
-export function PhonePreview({ state, ir, runKey, projectId, errorCount, codeOk, onLog, onRestart }: Props) {
+export function PhonePreview({ zoom, state, ir, runKey, projectId, errorCount, codeOk, onLog, onRestart }: Props) {
   const frame = useRef<HTMLIFrameElement>(null);
   const token = useMemo(() => Math.random().toString(36).slice(2) + runKey, [runKey]);
   // The document is rebuilt only when the app is (re)started. New code afterwards is pushed into the running app (hot reload),
@@ -76,7 +78,8 @@ export function PhonePreview({ state, ir, runKey, projectId, errorCount, codeOk,
   };
 
   return (
-    <section className="phone-wrap" aria-label="Android preview">
+    <section className="phone-wrap" aria-label="Android preview" title="Live preview, not an APK. Same runtime as the Android app.">
+      <FitStage w={340} h={680} zoom={zoom}>
       <div className="phone" data-testid="phone">
         <div className="phone-notch" />
         <div className="phone-screen">
@@ -95,6 +98,7 @@ export function PhonePreview({ state, ir, runKey, projectId, errorCount, codeOk,
           )}
         </div>
       </div>
+      </FitStage>
       <div className="row center">
         <button className="btn" onClick={onRestart} disabled={state !== 'ready'}>Restart app</button>
         <button className="btn" onClick={resetData} disabled={state !== 'ready'} title="Clears data saved with data_save_pannu in the preview">Reset app data</button>
@@ -104,7 +108,6 @@ export function PhonePreview({ state, ir, runKey, projectId, errorCount, codeOk,
           {codeOk ? '● Live: edits appear here instantly' : '⏸ Paused: fix the errors in your code (showing the last working version)'}
         </p>
       )}
-      <p className="muted small center-text">Live preview — not an APK. Same runtime as the Android app.</p>
     </section>
   );
 }

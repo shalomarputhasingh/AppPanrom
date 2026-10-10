@@ -410,3 +410,16 @@ def test_bar_pieces_only_go_where_they_fit():
             apply_op(s, {"kind": "insert", **op})
     ok = apply_op(s, {"kind": "insert", "type": "nav_action", "target_line": 4, "position": "inside"})["source"]
     assert 'nav_action("Action"' in ok and compile_source(ok).ok
+
+
+def test_reset_style_removes_a_computed_style_so_it_can_be_edited():
+    from apppanrom.lang.designer import describe
+    src = 'function box(c):\n    return {"background": c}\nscreen_uruvakku("home"):\n    card_uruvakku(style=box("#FFFFFF")):\n        summa\n'
+    d = describe(src, 4)
+    assert d["style_dynamic"] is True and d["style_expr"] == 'box("#FFFFFF")'
+    with pytest.raises(DesignError):                    # still refused while the style is computed (never silently dropped)
+        apply_op(src, {"kind": "set_style", "line": 4, "key": "padding", "value": {"literal": 4}})
+    out = apply_op(src, {"kind": "reset_style", "line": 4})["source"]
+    assert "style=" not in out.split("screen_uruvakku")[1] and compile_source(out).ok
+    out = apply_op(out, {"kind": "set_style", "line": 4, "key": "padding", "value": {"literal": 4}})["source"]
+    assert 'card_uruvakku(style={"padding": 4})' in out

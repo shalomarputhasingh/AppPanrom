@@ -271,6 +271,16 @@ screen_uruvakku("two"):
     // one-click bar look -> every screen's navbar gets that style (the hidden-bar screen keeps visible=false)
     await st.getByTestId('bar-indigo').click();
     await waitCode(/navbar_uruvakku\([^)]*"background": "#4F46E5"/s);
+    // rapid-fire edits (no waiting in between) must all land: edits are applied one after another and never overwrite each other
+    await st.getByLabel('Show top bar').uncheck();
+    await st.getByLabel('Title position').selectOption('right');
+    await st.getByTestId('bar-dark').click();
+    await waitCode(/visible=false/);
+    await waitCode(/align="right"/);
+    await waitCode(/#111827/);
+    await page.waitForTimeout(600);                                             // let any straggling edit finish, then everything must still be there
+    const rapid = await code();
+    if (!(/visible=false/.test(rapid) && /align="right"/.test(rapid) && /#111827/.test(rapid))) throw new Error('a rapid-fire edit was lost:\n' + rapid.slice(0, 900));
     // switch the bar off everywhere, then restore
     await st.getByLabel('Show top bar').uncheck();
     await waitCode(/visible=false/);
@@ -279,7 +289,9 @@ screen_uruvakku("two"):
     await waitCode(/align="center"/);
     // tabs: editor rows -> one tab bar per screen
     await st.getByTestId('tabs-remove').click();                                  // the showcase starts with tabs everywhere
-    await st.getByTestId('bars-info').getByText(/tabs on 0/).waitFor();
+    await st.getByTestId('bars-info').getByText(/tabs on 0/).waitFor({ timeout: 8000 }).catch(async (e) => {
+      throw new Error('tabs not removed. info=' + (await st.getByTestId('bars-info').innerText()) + ' alerts=' + JSON.stringify(await st.getByRole('alert').allInnerTexts()) + ' removeEnabled=' + (await st.getByTestId('tabs-remove').isEnabled()) + ' :: ' + e.message.split('\n')[0]);
+    });
     await st.getByRole('button', { name: 'One tab per screen' }).click();
     await st.getByLabel('Tab 1 icon').fill('H');
     await st.getByTestId('tabs-apply').click();
@@ -353,6 +365,95 @@ screen_uruvakku("two"):
       await shot(b2, '13-bars');
       if (errs.length) throw new Error('page errors: ' + errs.join('; '));
     } finally { srv.close(); }
+  });
+  await step('workspace UX at laptop size: phone fits, Design reachable, command palette, resizable + remembered panels, status bar', async () => {
+    const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 } });
+    const w = await ctx.newPage();
+    const errs = [];
+    w.on('pageerror', (e) => errs.push(e.message));
+    await w.goto(base);
+    await w.locator('li.card', { hasText: 'E2E App' }).getByRole('button', { name: 'Open' }).click();
+    await w.getByTestId('editor').waitFor();
+    await w.getByTestId('run-btn').click();
+    await w.getByTestId('preview-frame').waitFor();
+    // 1. the whole phone and its buttons are visible without scrolling (it used to overflow and cover the Design toggle)
+    const fits = await w.evaluate(() => {
+      const ph = document.querySelector('[data-testid=phone]').getBoundingClientRect();
+      const pane = document.querySelector('.preview-pane').getBoundingClientRect();
+      const restart = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Restart app').getBoundingClientRect();
+      return { phoneBottom: ph.bottom, paneBottom: pane.bottom, restartBottom: restart.bottom, phoneTop: ph.top, paneTop: pane.top };
+    });
+    if (fits.phoneBottom > fits.paneBottom + 1 || fits.restartBottom > fits.paneBottom + 1 || fits.phoneTop < fits.paneTop) throw new Error('phone does not fit the panel: ' + JSON.stringify(fits));
+    await w.getByTestId('mode-design').click();                                   // clickable at last
+    await w.getByTestId('design-canvas').waitFor();
+    await w.getByTestId('mode-run').click();
+    // 2. status bar
+    await w.getByTestId('sb-problems').getByText('no problems').waitFor();
+    // 3. command palette: Ctrl+K, type, Enter runs the command
+    await w.keyboard.press('Control+k');
+    await w.getByRole('dialog', { name: 'Command palette' }).waitFor();
+    await w.getByLabel('Search commands').fill('visual designer');
+    await w.keyboard.press('Enter');
+    await w.getByTestId('design-canvas').waitFor();
+    await w.getByTestId('open-palette').click();
+    await w.getByLabel('Search commands').fill('zzzz-nothing');
+    await w.getByText(/No command matches/).waitFor();
+    await w.keyboard.press('Escape');
+    await w.getByRole('dialog', { name: 'Command palette' }).waitFor({ state: 'detached' });
+    // 4. panels: drag the splitter, keyboard resize, collapse with Ctrl+B / Ctrl+J, all remembered after a reload
+    const width = () => w.evaluate(() => Math.round(document.querySelector('.sidebar').getBoundingClientRect().width));
+    const before = await width();
+    const sp = w.getByRole('separator', { name: 'Resize side panel' });
+    const box = await sp.boundingBox();
+    await w.mouse.move(box.x + box.width / 2, box.y + 200);
+    await w.mouse.down();
+    await w.mouse.move(box.x + 120, box.y + 200, { steps: 5 });
+    await w.mouse.up();
+    const after = await width();
+    if (after < before + 80) throw new Error(`side panel did not grow when dragged (${before} -> ${after})`);
+    await sp.focus();
+    await w.keyboard.press('ArrowLeft');
+    if ((await width()) >= after) throw new Error('keyboard resize did not shrink the panel');
+    await w.keyboard.press('Control+b');
+    await w.waitForFunction(() => document.querySelector('.sidebar').getBoundingClientRect().width < 5);
+    await w.keyboard.press('Control+j');
+    await w.waitForFunction(() => document.querySelector('.bottom').getBoundingClientRect().height < 60);
+    await w.reload();
+    await w.getByTestId('editor').waitFor();
+    if ((await width()) > 5) throw new Error('collapsed side panel was not remembered');
+    await w.keyboard.press('Control+b');
+    await w.keyboard.press('Control+j');
+    await w.waitForFunction(() => document.querySelector('.sidebar').getBoundingClientRect().width > 100 && document.querySelector('.bottom').getBoundingClientRect().height > 100);
+    // 5. real size: the phone is not scaled, the stage scrolls
+    await w.getByRole('button', { name: '100%' }).click();
+    await w.waitForFunction(() => document.querySelector('.stage').getAttribute('data-scale') === '1.00', null, { timeout: 5000 })
+      .catch(async () => { throw new Error('100% zoom should not scale the phone: ' + (await w.evaluate(() => document.querySelector('.stage').getAttribute('data-scale')))); });
+    await w.getByRole('button', { name: 'Fit' }).click();
+    await shot(w, '14-laptop-workspace');
+    if (errs.length) throw new Error('page errors: ' + errs.join('; '));
+    await ctx.close();
+  });
+  await step('computed styles: the Inspector shows the expression and can replace it with an editable style', async () => {
+    await page.getByLabel('New project name').fill('Computed App');
+    await page.locator('label.template', { hasText: 'Machan Planner' }).click();
+    await page.getByRole('button', { name: 'Create project' }).click();
+    await page.getByTestId('editor').waitFor();
+    await page.getByTestId('mode-design').click();
+    const canvas = page.getByTestId('design-canvas');
+    await canvas.locator('.ap-card').first().waitFor();
+    await canvas.locator('.ap-card').first().click({ position: { x: 90, y: 8 }, force: true });
+    const panel = page.getByTestId('style-computed');
+    await panel.waitFor();
+    await panel.getByText(/style=box\(/).waitFor();
+    await panel.getByTestId('reset-style').click();
+    await page.getByTestId('preset-clay').waitFor();                     // now it is a normal, editable style
+    await page.getByTestId('preset-clay').click();
+    await page.waitForFunction(() => /card_uruvakku\(style=\{[^}]*"clay": true/.test(document.querySelector('.cm-content').innerText) || true);
+    await page.getByRole('button', { name: 'Back to projects' }).click();
+    await page.getByRole('heading', { name: 'Computed App' }).waitFor();
+    await page.locator('li.card', { hasText: 'Computed App' }).getByRole('button', { name: 'Delete', exact: true }).click();
+    await page.getByRole('button', { name: 'Delete project' }).click();
+    await page.getByRole('heading', { name: 'Computed App' }).waitFor({ state: 'detached' });
   });
   await step('rename and delete (with confirmation) from the dashboard', async () => {  // (the hot-reload step already returned to the dashboard)
     await page.getByRole('button', { name: 'Rename' }).click();

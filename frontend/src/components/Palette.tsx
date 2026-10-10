@@ -2,7 +2,7 @@ import type { DragEvent } from 'react';
 
 export const NEW_TYPE = 'application/x-apppanrom-new';
 
-const GROUPS: { title: string; items: { type: string; label: string; glyph: string }[] }[] = [
+export const GROUPS: { title: string; items: { type: string; label: string; glyph: string }[] }[] = [
   {
     title: 'Layout',
     items: [

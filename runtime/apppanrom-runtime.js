@@ -1450,17 +1450,20 @@
         return;
       }
       var ar = app.getBoundingClientRect(), r = z.el.getBoundingClientRect(), before = z.position === 'before';
+      // the Studio may show the phone scaled (fit-to-panel): convert screen pixels back into the app's own pixels
+      var k = ar.width / (app.offsetWidth || ar.width) || 1;
+      function u(n) { return n / k + 'px'; }
       indicator.style.display = 'block';
       if (z.row) {
-        indicator.style.left = (before ? r.left : r.right) - ar.left - 1 + 'px';
-        indicator.style.top = r.top - ar.top + 'px';
+        indicator.style.left = u((before ? r.left : r.right) - ar.left) ;
+        indicator.style.top = u(r.top - ar.top);
         indicator.style.width = '3px';
-        indicator.style.height = r.height + 'px';
+        indicator.style.height = u(r.height);
       } else {
-        indicator.style.top = (before ? r.top : r.bottom) - ar.top - 1 + 'px';
-        indicator.style.left = r.left - ar.left + 'px';
+        indicator.style.top = u((before ? r.top : r.bottom) - ar.top);
+        indicator.style.left = u(r.left - ar.left);
         indicator.style.height = '3px';
-        indicator.style.width = r.width + 'px';
+        indicator.style.width = u(r.width);
       }
     }
     function hasType(ev, type) {

@@ -242,9 +242,23 @@ function EventRow({ ev, fn, node, disabled, onOp, onGoto, onCreateHandler }: {
 
 
 /** Style section: one-click looks, then grouped, collapsible controls. */
-function StylePanel({ node, spec, disabled, onOp, onPreview, onReplay }: { node: DesignNodeInfo; spec: Spec | null; disabled: boolean; onOp: OnOp; onPreview(op: Record<string, unknown> | null): void; onReplay(): void }) {
+function StylePanel({ node, spec, disabled, onOp, onPreview, onReplay, onGoto }: { node: DesignNodeInfo; spec: Spec | null; disabled: boolean; onOp: OnOp; onPreview(op: Record<string, unknown> | null): void; onReplay(): void; onGoto(line: number): void }) {
   const { error, run } = useOp(onOp);
-  if (node.style_dynamic) return <section><h4>Style</h4><p className="muted small">This style is computed in code; edit it in the editor.</p></section>;
+  if (node.style_dynamic) {
+    return (
+      <section data-testid="style-computed">
+        <h4>Style</h4>
+        <p className="small">This component's style is computed by your code:</p>
+        <pre className="code-block">style={node.style_expr}</pre>
+        <p className="muted small">Change the function that returns it, or replace it with a style you can edit here.</p>
+        <div className="row">
+          <button className="btn small" onClick={() => onGoto(node.line)}>Show in code</button>
+          <button className="btn small" disabled={disabled} data-testid="reset-style" onClick={() => void run({ kind: 'reset_style', line: node.line })}>Replace with an editable style</button>
+        </div>
+        {error && <div className="error-text small" role="alert">{error}</div>}
+      </section>
+    );
+  }
   if (!spec) return null;
   const isScreen = node.kind === 'screen';
   const allowed = new Set(node.allowed.style);
@@ -363,7 +377,7 @@ export function Inspector({ node, spec, disabled, onOp, onPreview, onReplay, onD
             ))}
           </section>
         )}
-        <StylePanel node={node} spec={spec} disabled={disabled} onOp={onOp} onPreview={onPreview} onReplay={onReplay} />
+        <StylePanel node={node} spec={spec} disabled={disabled} onOp={onOp} onPreview={onPreview} onReplay={onReplay} onGoto={onGoto} />
       </div>
     </div>
   );
