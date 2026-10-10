@@ -15,9 +15,24 @@ android {
         versionName "__VERSION_NAME__"
     }
 
+    // Release signing material is read from the environment of the Gradle process only (never from files in this project).
+    signingConfigs {
+        release {
+            def storeFilePath = System.getenv("APPANROM_SIGN_STORE_FILE")
+            if (storeFilePath) {
+                storeFile file(storeFilePath)
+                storePassword System.getenv("APPANROM_SIGN_STORE_PASSWORD")
+                keyAlias System.getenv("APPANROM_SIGN_KEY_ALIAS")
+                keyPassword System.getenv("APPANROM_SIGN_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
+            // Without the environment above this fails loudly instead of producing an unsigned "release".
+            signingConfig signingConfigs.release
         }
     }
     compileOptions {

@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 
 from ..lang.spec import REPO_ROOT
+from .icon import IconError, validate_png_icon
 
 TEMPLATE_DIR = REPO_ROOT / "android-template"
 RUNTIME_JS = REPO_ROOT / "runtime" / "apppanrom-runtime.js"
@@ -59,11 +60,18 @@ def xml_text(value: str) -> str:
     return out
 
 
-def uses_network(ir: dict) -> bool:
-    return '"c": "image_kaattu"' in json.dumps(ir)
+PERMISSION_RE = re.compile(r"^android\.permission\.[A-Z_]{3,40}$")
 
 
-def generate_project(ir: dict, dest: Path) -> None:
+def permissions(ir: dict) -> list[str]:
+    """Android permissions the app declares, derived by the compiler from the features the program uses."""
+    perms = sorted({p["permission"] for p in ir.get("permissions", [])})
+    if not all(PERMISSION_RE.fullmatch(p) for p in perms):
+        raise GenerateError("Invalid permission name in IR.")
+    return perms
+
+
+def generate_project(ir: dict, dest: Path, icon: Path | None = None) -> None:
     """Writes a complete Gradle project into `dest` (must not exist). Values come from the validated IR only."""
     app = ir["app"]
     if not APP_ID_RE.fullmatch(app["id"]) or not VERSION_RE.fullmatch(app["version"]):
@@ -83,8 +91,19 @@ def generate_project(ir: dict, dest: Path) -> None:
     gradle.write_text(text, encoding="utf-8")
 
     manifest = dest / "app" / "src" / "main" / "AndroidManifest.xml"
-    perms = '    <uses-permission android:name="android.permission.INTERNET" />' if uses_network(ir) else ""
-    manifest.write_text(manifest.read_text(encoding="utf-8").replace("__PERMISSIONS__", perms), encoding="utf-8")
+    perms = "\n".join(f'    <uses-permission android:name="{p}" />' for p in permissions(ir))
+    icon_attr = ""
+    if icon is not None:
+        try:
+            validate_png_icon(icon.read_bytes())
+        except (IconError, OSError) as e:
+            raise GenerateError(f"App icon rejected: {e}") from None
+        target = dest / "app" / "src" / "main" / "res" / "mipmap-xxxhdpi"
+        target.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(icon, target / "ic_launcher.png")
+        icon_attr = '        android:icon="@mipmap/ic_launcher"\n'
+    text = manifest.read_text(encoding="utf-8").replace("__PERMISSIONS__", perms).replace("__ICON_ATTR__", icon_attr)
+    manifest.write_text(text, encoding="utf-8")
 
     res = dest / "app" / "src" / "main" / "res" / "values"
     (res / "strings.xml").write_text(

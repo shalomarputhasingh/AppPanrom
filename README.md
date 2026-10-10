@@ -43,9 +43,12 @@ screen_uruvakku("home"):
 | Multi-screen navigation + back, screen data | ✅ |
 | App-local storage (`data_*`) | ✅ (not encrypted) |
 | Studio: projects (create/open/rename/delete), editor with highlighting + live diagnostics, console, live phone preview, settings, reference, examples | ✅ |
+| **Visual designer**: drag components from a palette onto the phone, select/move/duplicate/delete, outline tree, property inspector (properties, events, styles), new screens and handlers — every action edits `main.apn` and every code edit redraws the canvas | ✅ |
+| App icon (PNG upload), automatic Android permission declaration, `clipboard_copy`, `vibrate_pannu` | ✅ |
+| Release signing + release APK + AAB (keystore from environment, signature independently verified when tools are available) | ✅ implemented, **⚠ never run against a real Android SDK** (see below) |
 | Persistence of projects/builds across restarts (SQLite + files) | ✅ |
 | Android build pipeline (generate project → Gradle → verify → download) | ✅ implemented, **⚠ not yet verified against a real Android SDK** (see below) |
-| Network APIs (`api_get`…), device capabilities, app icon, release signing/AAB, dialogs, gradients/shadows/custom fonts, extra themes, "fun mode" | ❌ not implemented (the compiler says so) |
+| Network APIs (`api_get`…), runtime-permission device capabilities (camera, location…), dialogs, gradients/shadows/custom fonts, extra themes, "fun mode" | ❌ not implemented (the compiler says so) |
 | Authentication / multi-user | ❌ local single-user MVP |
 
 ### Honest note on APK builds
@@ -65,6 +68,26 @@ was reviewed against known-good configurations but is **unproven until you run a
 A build is only ever reported as succeeded if Gradle exits 0 *and* a nonzero-size, valid APK zip containing
 `AndroidManifest.xml` and the runtime exists. Output is a **debug APK signed with the Android debug key** — not
 Play-Store ready; release signing and AAB are not implemented.
+
+## Visual designer
+
+Press **✎ Design** above the phone (or open the **Design** tab). The designer is not a separate model of your app: **`main.apn` is the only
+source of truth**, and the designer edits it as text.
+
+* **Drag** a component from the palette onto the phone: onto empty space (appends to the screen), next to another component
+  (before/after, shown with a blue line) or into a container (dashed outline). Click a palette item to add it next to the selection.
+* **Click** a component (or pick it in the Outline) to select it; **drag** it to move it (containers move with their children);
+  **Del** removes it, **Ctrl+D** duplicates it; ↶ ↷ undo/redo (the editor's own undo history).
+* The **Inspector** edits properties, events and styles. Each field is a typed control (text, number, colour picker, dropdown…); **ƒx**
+  switches a field to a code expression such as `"Count: " + str(count)`. Invalid values (e.g. `font_size` 4) are rejected with the compiler's
+  message and never written. Choosing **＋ New handler…** writes a `function` into your code and wires the event to it.
+* **Live both ways:** every designer action rewrites the code in the editor (visible immediately, autosaved), and typing in the code redraws the
+  canvas as soon as it compiles. If the code has errors the designer freezes on the last valid design with a banner instead of guessing.
+* Empty containers contain `summa` (a no-op statement); it disappears when you drop something in.
+
+Under the hood each action is a small text edit (`backend/apppanrom/lang/designer.py`): components are addressed by source line, headers of edited
+components are regenerated from the AST, everything else (comments, formatting, other code) is untouched, and the result is re-parsed before it is
+accepted. Randomised tests apply hundreds of edits and check the file always stays valid.
 
 ## Quick start
 
@@ -116,6 +139,20 @@ and string resources (values are validated and XML-escaped; build directories ar
 with an argument array, and a timeout and log-size cap apply). Gradle needs to download dependencies from Google Maven /
 Maven Central on first build.
 
+### App icon, permissions, signing, AAB
+
+* **Icon:** Settings → App icon (square PNG, 192–1024 px, ≤500 KB). It becomes the launcher icon.
+* **Permissions:** declared automatically from what your code uses (`image_kaattu` → INTERNET, `vibrate_pannu` → VIBRATE) and listed in the Build tab.
+  Runtime-prompt permissions are not implemented.
+* **Release signing (never in the repo, the database or the logs):**
+  1. `cd backend && python3 -m apppanrom.cli make-keystore ~/keys/myapp.jks --alias release` (prompts for a password; needs `keytool`).
+  2. Start the backend with `APPANROM_KEYSTORE`, `APPANROM_KEYSTORE_PASSWORD`, `APPANROM_KEY_ALIAS` (and `APPANROM_KEY_PASSWORD` if different).
+  3. In **Build**, choose *Release APK* or *Release AAB*. Without a configured key these are disabled and any attempt fails; **an unsigned "release" is never produced**.
+  The secrets are passed only to the Gradle process environment. After the build the signature is checked independently
+  (`apksigner` for APKs, `jarsigner` for bundles); an APK signed with the Android debug key is rejected as a release.
+  If the verifier tool isn't installed the build is reported as *"not independently verified"*. **Back up your keystore**: you cannot update a published app without it.
+* Release builds use the same pipeline as debug builds and are subject to the same caveat below: not yet run against a real SDK.
+
 ## Tests
 
 ```bash
@@ -128,16 +165,18 @@ make e2e         # real backend + real Chromium: create project, edit, diagnosti
 |---|---|
 | `backend/tests/test_language.py` – parser/validator/diagnostics/limits | no |
 | `backend/tests/test_api.py` – CRUD, validation, path traversal, persistence, CORS | no |
-| `backend/tests/test_builds.py` – build manager with a Gradle test double (needs `java` for the prerequisite check) | no (but not a real build) |
+| `backend/tests/test_builds.py`, `test_signing_icon.py` – build manager with a Gradle test double (needs `java`); signing uses a real `keytool`/`jarsigner` | no (but not a real Gradle build) |
+| `backend/tests/test_designer.py` – drop/move/delete/duplicate/property/style/event edits incl. 150 randomised edits | no |
 | `runtime/test/` – interpreter, view tree, events, state, navigation, styles, storage, limits | no (calls the Python compiler) |
-| `frontend/e2e/run.mjs` | no (Chromium required; uses `/opt/pw-browsers` or `CHROMIUM_PATH`) |
+| `frontend/e2e/run.mjs` – incl. drag-and-drop designer flow | no (Chromium required; uses `/opt/pw-browsers` or `CHROMIUM_PATH`) |
 | A real `assembleDebug` | **yes — not part of the automated suite yet** |
 
 ## API (local, unauthenticated)
 
 `GET /health` · `GET /api/system/status` · `GET /api/language/spec` · `GET|POST /api/projects` ·
 `GET|PATCH|DELETE /api/projects/{id}` · `GET /api/projects/{id}/files` · `GET|PUT|DELETE /api/projects/{id}/files/{name}` ·
-`POST /api/projects/{id}/validate` · `POST /api/projects/{id}/preview` · `GET|POST /api/projects/{id}/builds` ·
+`POST /api/projects/{id}/validate` · `POST /api/projects/{id}/preview` · `POST /api/projects/{id}/design/edit|node` ·
+`PUT|GET|DELETE /api/projects/{id}/icon` · `GET|POST /api/projects/{id}/builds` (`{"kind": "debug_apk"|"release_apk"|"release_aab"}`) ·
 `GET /api/builds/{id}` · `GET /api/builds/{id}/logs?offset=` · `GET /api/builds/{id}/artifact`.
 Errors are always `{"error": {"code", "message", "details?"}}`. Interactive docs: `/docs`.
 
@@ -156,7 +195,8 @@ go through a server-side validated proxy.
 ## Known limitations / next steps
 
 * Run a real build on a machine with the Android SDK and fix whatever the template needs; add it as a CI job.
-* App icon, release signing (secure config), AAB, network APIs, device capabilities, dialogs, more themes.
+* Network APIs, runtime-permission device capabilities, dialogs, more themes. Release signing/AAB/icon are implemented but unverified against a real SDK.
+* Designer: no resize handles or free positioning (layout is flex-based, so you reorder/nest and set sizes in the inspector); selection is cleared when you type in the code (line numbers shift); edits to components that were generated by loops act on the one source line.
 * Text-input IME: redraws are deferred during composition; the whole screen is rebuilt on each event (fine for small apps).
 * Only `main.apn` is compiled; additional files are notes.
 * Builds run one at a time; the build list shows the latest 50 builds; APK files are kept for the latest 10 builds per project (older records stay, their APKs are pruned).

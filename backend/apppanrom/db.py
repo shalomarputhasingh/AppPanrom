@@ -49,6 +49,9 @@ class Database:
         with self._lock:
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.executescript(SCHEMA)
+            cols = {r[1] for r in self._conn.execute("PRAGMA table_info(builds)")}
+            if "signing" not in cols:  # added after the first release of the schema
+                self._conn.execute("ALTER TABLE builds ADD COLUMN signing TEXT")
 
     def query(self, sql: str, params: tuple = ()) -> list[dict]:
         with self._lock:

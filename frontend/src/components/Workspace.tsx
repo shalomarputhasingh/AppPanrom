@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
-import type { Diagnostic, LogLine, Project, Spec } from '../types';
+import type { AppPermission, DesignNodeInfo, DesignTree, Diagnostic, DropInfo, LogLine, Project, Spec } from '../types';
 import { BuildPanel } from './BuildPanel';
 import { ConsolePanel } from './ConsolePanel';
+import { DesignCanvas, type CanvasHandle } from './DesignCanvas';
+import { Inspector } from './Inspector';
+import { Outline } from './Outline';
+import { Palette } from './Palette';
 import { Dialog } from './Dialog';
 import { DiagnosticsPanel } from './DiagnosticsPanel';
 import { Editor, type EditorHandle } from './Editor';
@@ -10,8 +14,10 @@ import { PhonePreview, type PreviewState } from './PhonePreview';
 import { ReferencePanel } from './ReferencePanel';
 import { SettingsPanel } from './SettingsPanel';
 
-type Bottom = 'console' | 'diagnostics' | 'build';
-type Side = 'files' | 'settings' | 'reference';
+type Bottom = 'console' | 'diagnostics' | 'build' | 'inspector';
+type Side = 'files' | 'design' | 'settings' | 'reference';
+type Mode = 'run' | 'design';
+type Sync = 'ok' | 'pending' | 'errors';
 type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
 const MAIN = 'main.apn';
 let logId = 0;
@@ -35,6 +41,15 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
   const [fileError, setFileError] = useState<string | null>(null);
   const [confirmExample, setConfirmExample] = useState<string | null>(null);
   const [confirmDeleteFile, setConfirmDeleteFile] = useState<string | null>(null);
+  // ---- designer state
+  const [mode, setMode] = useState<Mode>('run');
+  const [designIr, setDesignIr] = useState<unknown>(null);
+  const [sync, setSync] = useState<Sync>('pending');
+  const [selected, setSelected] = useState<number | null>(null);
+  const [tree, setTree] = useState<DesignTree | null>(null);
+  const [nodeInfo, setNodeInfo] = useState<DesignNodeInfo | null>(null);
+  const [designError, setDesignError] = useState<string | null>(null);
+  const [addingScreen, setAddingScreen] = useState<string | null>(null);
 
   const text = useRef('');
   const dirty = useRef(false);
@@ -42,6 +57,11 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
   const valTimer = useRef<number>();
   const valSeq = useRef(0);
   const editor = useRef<EditorHandle>(null);
+  const canvas = useRef<CanvasHandle | null>(null);
+  const designEditing = useRef(false);
+  const syncRef = useRef<Sync>('pending');
+  const pendingScreen = useRef<string | null>(null);
+  syncRef.current = sync;
 
   const log = useCallback((level: LogLine['level'], t: string) => {
     setLogs((l) => [...l.slice(-499), { id: ++logId, level, text: t, time: clock() }]);
@@ -93,12 +113,15 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
     }
   }, [projectId, file, log]);
 
+  /** Compiles the buffer: feeds diagnostics, and (when it compiles) the design canvas. The source text is the only model. */
   const validate = useCallback((src: string) => {
     const seq = ++valSeq.current;
-    api.validate(projectId, src).then((r) => {
+    setSync('pending');
+    api.preview(projectId, src).then((r) => {
       if (seq !== valSeq.current) return;
       setDiags(r.diagnostics);
       setChecked(true);
+      if (r.ok && r.ir) { setDesignIr(r.ir); setSync('ok'); } else setSync('errors');
     }, () => undefined);
   }, [projectId]);
 
@@ -106,6 +129,8 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
     text.current = v;
     dirty.current = true;
     setSave('dirty');
+    if (!designEditing.current) { setSelected(null); setSync('pending'); } // lines shift when code is typed
+
     window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => void doSave(), 1200);
     if (file === MAIN) {
@@ -124,6 +149,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
   // ---- run
   const run = useCallback(async () => {
     if (file !== MAIN) { log('warning', 'Only main.apn is run. Select main.apn first.'); return; }
+    setMode('run');
     setPreview((p) => ({ ...p, state: 'loading' }));
     if (!(await doSave())) { setPreview((p) => ({ ...p, state: 'empty' })); return; }
     try {
@@ -155,6 +181,119 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
     window.addEventListener('keydown', on);
     return () => window.removeEventListener('keydown', on);
   }, [run]);
+
+  // ---- designer: every action is a text edit of main.apn; the editor, autosave and compiler pick it up like typing
+  const applyDesignEdit = useCallback(async (op: Record<string, unknown>, quiet = false): Promise<string | null> => {
+    if (syncRef.current !== 'ok') {
+      const m = 'Fix the errors in your code first; the designer needs code that compiles.';
+      if (!quiet) setDesignError(m);
+      return m;
+    }
+    try {
+      const r = await api.designEdit(projectId, text.current, op);
+      designEditing.current = true;
+      editor.current?.replaceAll(r.source);
+      designEditing.current = false;
+      window.clearTimeout(valTimer.current);
+      validate(r.source);
+      setSelected(r.line);
+      if (r.line) editor.current?.reveal(r.line);
+      setDesignError(null);
+      return null;
+    } catch (e) {
+      designEditing.current = false;
+      const m = (e as Error).message;
+      if (!quiet) setDesignError(m);
+      return m;
+    }
+  }, [projectId, validate]);
+
+  const onCanvasDrop = useCallback((d: DropInfo) => {
+    void applyDesignEdit(d.source === 'new'
+      ? { kind: 'insert', type: d.type, target_line: d.target_line, position: d.position, screen: d.screen }
+      : { kind: 'move', line: d.line, target_line: d.target_line, position: d.position, screen: d.screen });
+  }, [applyDesignEdit]);
+
+  const addFromPalette = useCallback((type: string) => {
+    const screen = tree?.screen;
+    if (selected != null && nodeInfo && nodeInfo.line === selected) {
+      void applyDesignEdit({ kind: 'insert', type, target_line: selected, position: nodeInfo.container ? 'inside' : 'after', screen });
+    } else void applyDesignEdit({ kind: 'insert', type, screen });
+  }, [applyDesignEdit, selected, nodeInfo, tree]);
+
+  const deleteSelected = useCallback(() => {
+    if (selected != null && nodeInfo?.kind === 'component') void applyDesignEdit({ kind: 'delete', line: selected });
+  }, [applyDesignEdit, selected, nodeInfo]);
+  const duplicateSelected = useCallback(() => {
+    if (selected != null && nodeInfo?.kind === 'component') void applyDesignEdit({ kind: 'duplicate', line: selected });
+  }, [applyDesignEdit, selected, nodeInfo]);
+
+  const inspectorOp = useCallback((op: Record<string, unknown>) => applyDesignEdit({ ...op }, true), [applyDesignEdit]);
+  /** Creates `function name():` in the code and wires the selected component's event to it, as one visible edit. */
+  const createHandler = useCallback(async (name: string, event: string): Promise<string | null> => {
+    if (syncRef.current !== 'ok' || selected == null) return 'Fix the errors in your code first.';
+    try {
+      const a = await api.designEdit(projectId, text.current, { kind: 'create_handler', name });
+      const delta = a.source.split('\n').length - text.current.split('\n').length;
+      const line = selected + delta;
+      const b = await api.designEdit(projectId, a.source, { kind: 'set_event', line, event, function: name });
+      designEditing.current = true;
+      editor.current?.replaceAll(b.source);
+      designEditing.current = false;
+      window.clearTimeout(valTimer.current);
+      validate(b.source);
+      setSelected(line);
+      if (a.line) editor.current?.reveal(a.line);
+      return null;
+    } catch (e) {
+      designEditing.current = false;
+      return (e as Error).message;
+    }
+  }, [projectId, selected, validate]);
+
+  const addScreen = async () => {
+    const name = (addingScreen ?? '').trim();
+    if (!name) return;
+    const err = await applyDesignEdit({ kind: 'add_screen', name });
+    if (!err) { pendingScreen.current = name; setAddingScreen(null); }
+  };
+
+  useEffect(() => {
+    if (pendingScreen.current && canvas.current) { canvas.current.setScreen(pendingScreen.current); pendingScreen.current = null; }
+  }, [designIr]);
+
+  useEffect(() => {
+    if (mode !== 'design' || selected == null) { setNodeInfo(null); return; }
+    if (sync !== 'ok') return;
+    let live = true;
+    api.designNode(projectId, text.current, selected).then(
+      (n) => { if (live) { setNodeInfo(n); setBottom((b) => (b === 'console' || b === 'diagnostics' ? 'inspector' : b)); } },
+      () => { if (live) { setNodeInfo(null); } },
+    );
+    return () => { live = false; };
+  }, [mode, selected, sync, designIr, projectId]);
+
+  useEffect(() => {
+    if (mode !== 'design') return;
+    const on = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.closest('.cm-editor') || /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName) || t.isContentEditable)) return;
+      if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); }
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSelected(); }
+      else if (e.key === 'Escape') setSelected(null);
+    };
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
+  }, [mode, deleteSelected, duplicateSelected]);
+
+  const enterMode = async (m: Mode) => {
+    if (m === 'design') {
+      if (file !== MAIN && (await doSave())) await openFile(MAIN);
+      setSide('design');
+      validate(text.current);
+    }
+    setMode(m);
+  };
 
   // ---- files
   const createFile = async () => {
@@ -221,8 +360,8 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
 
       <aside className="sidebar">
         <div className="tabs" role="tablist">
-          {(['files', 'settings', 'reference'] as Side[]).map((s) => (
-            <button key={s} role="tab" aria-selected={side === s} className={side === s ? 'on' : ''} onClick={() => setSide(s)}>{s[0].toUpperCase() + s.slice(1)}</button>
+          {(['files', 'design', 'settings', 'reference'] as Side[]).map((s) => (
+            <button key={s} role="tab" aria-selected={side === s} className={side === s ? 'on' : ''} onClick={() => setSide(s)}>{s === 'reference' ? 'Docs' : s[0].toUpperCase() + s.slice(1)}</button>
           ))}
         </div>
         <div className="side-body">
@@ -244,6 +383,18 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
               <p className="muted small">Only <code>main.apn</code> is compiled. Other files are notes stored with the project.</p>
             </>
           )}
+          {side === 'design' && (
+            mode !== 'design' ? (
+              <div className="empty small"><p>The designer lets you drag components onto the phone and edit them visually. Every change is written into your code.</p>
+                <button className="btn primary" onClick={() => void enterMode('design')} data-testid="open-designer">Open designer</button></div>
+            ) : (
+              <>
+                <Palette disabled={sync !== 'ok' || file !== MAIN} onAdd={addFromPalette} />
+                <h4>Outline</h4>
+                <Outline tree={tree} selected={selected} onSelect={(l) => setSelected(l)} />
+              </>
+            )
+          )}
           {side === 'settings' && <SettingsPanel project={project} onSaved={(p) => { setProject(p); validate(text.current); }} />}
           {side === 'reference' && <ReferencePanel spec={spec} onUseExample={(c) => setConfirmExample(c)} />}
         </div>
@@ -255,7 +406,54 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
       </section>
 
       <section className="preview-pane">
-        <PhonePreview state={preview.state} ir={preview.ir} runKey={preview.runKey} projectId={projectId} errorCount={errorCount} onLog={log} onRestart={restart} />
+        <div className="preview-col">
+          <div className="seg" role="tablist" aria-label="Preview mode">
+            <button role="tab" aria-selected={mode === 'run'} className={mode === 'run' ? 'on' : ''} onClick={() => void enterMode('run')} data-testid="mode-run">▶ Preview</button>
+            <button role="tab" aria-selected={mode === 'design'} className={mode === 'design' ? 'on' : ''} onClick={() => void enterMode('design')} data-testid="mode-design">✎ Design</button>
+          </div>
+          {mode === 'run' ? (
+            <PhonePreview state={preview.state} ir={preview.ir} runKey={preview.runKey} projectId={projectId} errorCount={errorCount} onLog={log} onRestart={restart} />
+          ) : (
+            <div className="design-pane">
+              <div className="design-toolbar">
+                <label className="sr-only" htmlFor="screen-pick">Screen</label>
+                <select id="screen-pick" value={tree?.screen ?? ''} onChange={(e) => canvas.current?.setScreen(e.target.value)} disabled={!tree} data-testid="screen-pick">
+                  {(tree?.screens ?? []).map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+                {addingScreen === null ? (
+                  <button className="btn small" onClick={() => setAddingScreen('')} disabled={sync !== 'ok'}>+ Screen</button>
+                ) : (
+                  <form className="row" onSubmit={(e) => { e.preventDefault(); void addScreen(); }}>
+                    <input autoFocus aria-label="New screen name" placeholder="details" value={addingScreen} onChange={(e) => setAddingScreen(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setAddingScreen(null)} />
+                    <button className="btn small primary" disabled={!addingScreen.trim()}>Add</button>
+                  </form>
+                )}
+                <span className="spacer" />
+                <button className="btn small" onClick={() => editor.current?.undo()} title="Undo (also Ctrl+Z in the editor)" aria-label="Undo">↶</button>
+                <button className="btn small" onClick={() => editor.current?.redo()} title="Redo" aria-label="Redo">↷</button>
+                <button className="btn small" onClick={duplicateSelected} disabled={!nodeInfo || nodeInfo.kind !== 'component' || sync !== 'ok'} aria-label="Duplicate" title="Duplicate (Ctrl+D)">⧉</button>
+                <button className="btn small danger-outline" onClick={deleteSelected} disabled={!nodeInfo || nodeInfo.kind !== 'component' || sync !== 'ok'} data-testid="toolbar-delete" aria-label="Delete" title="Delete (Del)">✕</button>
+              </div>
+              {sync === 'errors' && (
+                <p className="design-banner" role="alert" data-testid="design-stale">
+                  Your code has {errorCount} error{errorCount === 1 ? '' : 's'}. Showing the last valid design; fix the errors (see Diagnostics) to keep designing.
+                </p>
+              )}
+              {designError && <p className="design-banner err" role="alert" data-testid="design-error">{designError} <button className="btn small" onClick={() => setDesignError(null)}>Dismiss</button></p>}
+              <div className="phone" data-testid="design-phone">
+                <div className="phone-notch" />
+                <div className={`phone-screen ${sync === 'errors' ? 'stale' : ''}`}>
+                  {designIr ? (
+                    <DesignCanvas ir={designIr} selectedLine={selected} onSelect={setSelected} onDrop={onCanvasDrop} onTree={setTree} ctrlRef={canvas} />
+                  ) : (
+                    <div className="phone-msg err" role="alert"><strong>Nothing to design yet</strong><span>Fix the errors in your code first.</span></div>
+                  )}
+                </div>
+              </div>
+              <p className="muted small center-text">Drag components from the palette. Click to select, drag to move, Delete to remove.</p>
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="bottom">
@@ -264,11 +462,19 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
           <button role="tab" aria-selected={bottom === 'diagnostics'} className={bottom === 'diagnostics' ? 'on' : ''} onClick={() => setBottom('diagnostics')} data-testid="tab-diagnostics">
             Diagnostics {checked && (errorCount > 0 ? <span className="pill err">{errorCount}</span> : warnCount > 0 ? <span className="pill warn">{warnCount}</span> : null)}
           </button>
+          {mode === 'design' && (
+            <button role="tab" aria-selected={bottom === 'inspector'} className={bottom === 'inspector' ? 'on' : ''} onClick={() => setBottom('inspector')} data-testid="tab-inspector">Inspector</button>
+          )}
           <button role="tab" aria-selected={bottom === 'build'} className={bottom === 'build' ? 'on' : ''} onClick={() => setBottom('build')} data-testid="tab-build">Build</button>
         </div>
         {bottom === 'console' && <ConsolePanel lines={logs} onClear={() => setLogs([])} />}
         {bottom === 'diagnostics' && <DiagnosticsPanel diagnostics={diags} checked={checked} onJump={(d) => editor.current?.jumpTo(d.line, d.col)} />}
-        {bottom === 'build' && <BuildPanel projectId={projectId} ensureSaved={doSave} onProblems={(d) => { setDiags(d); setChecked(true); }} />}
+        {bottom === 'inspector' && mode === 'design' && (
+          <Inspector node={nodeInfo} spec={spec} disabled={sync !== 'ok'} onOp={inspectorOp} onDelete={deleteSelected} onDuplicate={duplicateSelected}
+            onGoto={(l) => editor.current?.jumpTo(l, 1)} onCreateHandler={createHandler} />
+        )}
+        {bottom === 'build' && <BuildPanel projectId={projectId} ensureSaved={doSave} onProblems={(d) => { setDiags(d); setChecked(true); }}
+          permissions={(designIr as { permissions?: AppPermission[] } | null)?.permissions ?? []} />}
       </section>
 
       {confirmExample !== null && (

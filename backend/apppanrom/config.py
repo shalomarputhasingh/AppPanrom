@@ -24,10 +24,20 @@ class Settings:
     keep_artifacts_per_project: int = 10
     keep_build_dirs: bool = False
     cors_origins: list[str] = field(default_factory=list)
+    # Release signing. Secrets come only from the environment, are hidden from repr(), and are never stored or returned.
+    keystore_path: Path | None = None
+    keystore_password: str | None = field(default=None, repr=False)
+    key_alias: str | None = None
+    key_password: str | None = field(default=None, repr=False)
     max_projects: int = 200
     max_files_per_project: int = 20
     max_file_bytes: int = 200_000
     max_request_bytes: int = 1_000_000
+
+    @property
+    def effective_key_password(self) -> str:
+        """The key password, defaulting to the keystore password (the common keytool setup)."""
+        return self.key_password or self.keystore_password or ""
 
     @property
     def db_path(self) -> Path:
@@ -62,6 +72,10 @@ class Settings:
             java_home=Path(java_home) if java_home else None,
             build_timeout_s=_int("APPANROM_BUILD_TIMEOUT", 900),
             keep_build_dirs=env.get("APPANROM_KEEP_BUILD_DIRS") == "1",
+            keystore_path=Path(env["APPANROM_KEYSTORE"]) if env.get("APPANROM_KEYSTORE") else None,
+            keystore_password=env.get("APPANROM_KEYSTORE_PASSWORD"),
+            key_alias=env.get("APPANROM_KEY_ALIAS"),
+            key_password=env.get("APPANROM_KEY_PASSWORD") or env.get("APPANROM_KEYSTORE_PASSWORD"),
             cors_origins=[o.strip() for o in origins.split(",") if o.strip() and o.strip() != "*"],
         )
 

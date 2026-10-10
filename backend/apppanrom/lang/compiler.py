@@ -64,6 +64,7 @@ class Compiler:
         self.used_input_names: list[tuple[str, list[int]]] = []
         self.nav_targets: list[tuple[str, list[int]]] = []
         self.config: dict[str, str] = {}
+        self.used_permission_sources: dict[str, set[str]] = {}
 
     # ---- diagnostics -----------------------------------------------------
     def error(self, node_or_pos, message: str, code: str, suggestion: str | None = None):
@@ -79,6 +80,15 @@ class Compiler:
     def suggest(self, name: str, pool) -> str | None:
         close = difflib.get_close_matches(name, list(pool), n=1, cutoff=0.6)
         return f"Did you mean '{close[0]}'?" if close else None
+
+    def _note_use(self, name: str):
+        perm = self.spec.get("permissions", {}).get(name)
+        if perm:
+            self.used_permission_sources.setdefault(perm["android"], set()).add(name)
+
+    def _permissions(self) -> list[dict]:
+        reasons = {v["android"]: v["reason"] for v in self.spec.get("permissions", {}).values()}
+        return [{"permission": p, "reason": reasons[p], "used_by": sorted(u)} for p, u in sorted(self.used_permission_sources.items())]
 
     # ---- top level ---------------------------------------------------------
     def compile(self, source: str) -> CompileResult:
@@ -157,6 +167,7 @@ class Compiler:
             "ir_version": IR_VERSION,
             "app": app,
             "style_schema": self.spec["styles"],
+            "permissions": self._permissions(),
             "globals": ir_globals,
             "functions": ir_functions,
             "screens": ir_screens,
@@ -214,6 +225,8 @@ class Compiler:
 
     def _stmt(self, st: dict, scope: set[str], ctx: str) -> dict | None:
         t = st["t"]
+        if t == "summa":
+            return {"t": "summa", "pos": st["pos"]}
         if t == "let":
             e = self._expr(st["e"], scope, ctx)
             if st["n"] in scope:
@@ -301,6 +314,7 @@ class Compiler:
     # ---- components -----------------------------------------------------------------
     def _component(self, st: dict, scope: set[str], spec: dict) -> dict:
         name = st["f"]
+        self._note_use(name)
         if st["t"] == "block_call" and not spec["container"]:
             self.error(st, f"'{name}' cannot contain other components.", "no_block")
         if st["t"] == "call_stmt" and spec["container"]:
@@ -472,6 +486,7 @@ class Compiler:
             return out
         fs = self.spec["functions"].get(name)
         if fs is not None:
+            self._note_use(name)
             self._arity(e, fs["min"], fs["max"], fs["doc"])
             for i, (a, want) in enumerate(zip(e["args"], fs.get("arg_types", []))):
                 lt = literal_type(a)

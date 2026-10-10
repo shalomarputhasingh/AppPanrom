@@ -118,3 +118,17 @@ def test_sql_injection_in_ids_is_inert(client, settings):
 def test_language_spec_endpoint(client):
     spec = client.get("/api/language/spec").json()
     assert "button" in spec["components"] and "text_upper" in spec["functions"]
+
+
+def test_design_endpoints(client):
+    p = mk(client)
+    src = client.get(f"/api/projects/{p['id']}/files/main.apn").json()["content"]
+    r = client.post(f"/api/projects/{p['id']}/design/edit", json={"source": src, "op": {"kind": "insert", "type": "button", "screen": "home"}})
+    assert r.status_code == 200 and 'button("Button")' in r.json()["source"] and r.json()["line"] > 1
+    new = r.json()
+    n = client.post(f"/api/projects/{p['id']}/design/node", json={"source": new["source"], "line": new["line"]}).json()
+    assert n["component"] == "button" and n["props"]["label"]["literal"]["value"] == "Button"
+    bad = client.post(f"/api/projects/{p['id']}/design/edit", json={"source": src, "op": {"kind": "delete", "line": 1}})
+    assert bad.status_code == 422 and set(bad.json()["error"]) >= {"code", "message"}
+    assert client.post("/api/projects/p_000000000000/design/edit", json={"source": src, "op": {}}).status_code == 404
+    assert client.post(f"/api/projects/{p['id']}/design/edit", json={"source": src}).status_code == 422

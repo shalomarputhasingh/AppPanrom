@@ -49,7 +49,7 @@ project settings made in the Studio; the Studio values are the defaults. **All**
 * Newlines inside `(...)`, `[...]`, `{...}` are ignored, so long calls may span lines.
 * Strings use straight `"` or `'` quotes with escapes `\n \t \" \' \\`. Curly quotes are rejected with a hint.
 * Numbers: `42`, `3.14`. Literals: `true`, `false`, `null`.
-* Keywords: `mari function return enna_na illana_enna illana ovvoru in irukkura_varai try catch and or not true false null`.
+* Keywords: `mari function return enna_na illana_enna illana ovvoru in irukkura_varai try catch and or not summa true false null`.
 
 ## 3. Values, variables, operators
 
@@ -92,6 +92,9 @@ catch error:                   # `error` is the message text
     error_kaattu(error)
 ```
 
+`summa` ("nothing") is a statement that does nothing. It makes an empty block legal, e.g. an empty container you will fill in
+later, or a handler you haven't written yet. The visual designer uses it for empty containers.
+
 There is no `break`/`continue`. A `try` catches runtime errors but **not** resource-limit errors.
 
 ## 5. Screens, components, layout
@@ -99,7 +102,7 @@ There is no `break`/`continue`. A `try` catches runtime errors but **not** resou
 A screen is a block of component statements. Components may be nested inside containers, and `enna_na` / `ovvoru`
 may be used inside screens and containers to build UI conditionally or from lists. **A screen is re-drawn after every
 event** (button, input change, navigation); drawing must be pure: it may read variables and call pure functions, but it
-may not assign globals or call functions that change state (`message_kaattu`, `toast_kaattu`, `input_set`, `data_save_pannu`,
+may not assign globals or call functions that change state (`message_kaattu`, `toast_kaattu`, `input_set`, `clipboard_copy`, `vibrate_pannu`, `data_save_pannu`,
 `data_delete_pannu`, `data_clear_pannu`, `screen_ku_poo`, `screen_back_poo`, `screen_data_set`). Change state in event handlers.
 
 `screen_title(text)` sets the app-bar title (default: the app name). `screen_uruvakku("name", style={...})` accepts a screen style.
@@ -239,9 +242,23 @@ Aliases are intentionally avoided: there is one name per operation.
 | `screen_ku_poo(name)` | navigate to a screen |
 | `screen_back_poo()` | go back (no-op on the first screen) |
 | `screen_data_set(key, value)` | shared in-memory data for screen-to-screen passing |
+| `clipboard_copy(text)` | copy text to the clipboard (needs a user tap; no Android permission required). In the preview it needs a browser that allows it, otherwise a console warning is logged |
+| `vibrate_pannu(milliseconds)` | vibrate the phone, 1-5000 ms. Declares the `VIBRATE` permission. The preview only vibrates on devices that support it (otherwise a warning is logged) |
 | `screen_data_get(key, default=null)` |  |
 
-## 8. Local data storage
+## 8. Android permissions
+
+The compiler works out which Android permissions your program needs and the APK declares **exactly those** (also shown in the Studio's
+Build tab). Both are *install-time* ("normal") permissions: no runtime prompt appears.
+
+| Feature used | Permission | Why |
+|---|---|---|
+| `image_kaattu` | `INTERNET` | images are loaded from the internet |
+| `vibrate_pannu` | `VIBRATE` | making the phone vibrate |
+
+Permissions that need a runtime prompt (camera, location, notifications...) are **not implemented**. Nothing is requested "just in case".
+
+## 9. Local data storage
 
 `data_save_pannu` / `data_edu` / `data_delete_pannu` / `data_clear_pannu` store JSON-compatible values per app.
 In the Studio preview the data lives in your browser, keyed by project; in an APK it lives in the app's private WebView
@@ -249,7 +266,7 @@ storage. A project's data is never visible to another project's runtime. Limits:
 characters, ≤ 1 000 000 characters per app; exceeding them raises an error. **This is not a secure vault** and is not
 encrypted. Do not store passwords or tokens.
 
-## 9. Runtime limits and security model
+## 10. Runtime limits and security model
 
 * Source is untrusted. It is parsed with a fixed grammar and run by an interpreter with a function allow-list;
   there is no `eval`, `exec`, import, file, process or network access from AppPanrom code.
@@ -261,13 +278,13 @@ encrypted. Do not store passwords or tokens.
   CSP, and **no JavaScript-to-native bridge**.
 * Random functions use `Math.random` and are **not** cryptographically secure.
 
-## 10. Supported vs. unsupported
+## 11. Supported vs. unsupported
 
 Implemented and tested: everything in this document. **Not implemented** (the compiler says so if you use them):
-`api_get, api_post, api_put, api_delete, api_json, dialog_kaattu, app_icon_set, app_config, state_uruvakku, state_get, state_set, ui_refresh, screen_refresh, vadivelu_mode, enna_kodumai_debug, summa_adirudhulla, gradient_set, shadow_set`. Network APIs, device capabilities (camera, location, notifications...),
-app icons, release signing and AAB output are future work. The optional "fun mode" is not implemented.
+`api_get, api_post, api_put, api_delete, api_json, dialog_kaattu, app_icon_set, app_config, state_uruvakku, state_get, state_set, ui_refresh, screen_refresh, vadivelu_mode, enna_kodumai_debug, summa_adirudhulla, gradient_set, shadow_set`. Network APIs and runtime-permission device capabilities (camera, location, notifications...)
+are future work. The app icon, release signing and AAB output are handled by the Studio / build pipeline, not by language functions. The optional "fun mode" is not implemented.
 
-## 11. Common errors
+## 12. Common errors
 
 | Message | Cause / fix |
 |---|---|
@@ -279,7 +296,7 @@ app icons, release signing and AAB output are future work. The optional "fun mod
 | `Screens cannot change global 'n' while drawing` | Move the assignment into an event-handler function. |
 | `Indentation must be a multiple of 4 spaces` | Use 4 spaces per level, no tabs. |
 
-## 12. AST and IR (for tool authors)
+## 13. AST and IR (for tool authors)
 
 `parse()` produces plain-dict nodes with `t` (type) and `pos: [line, col]`. Statements: `let`, `assign`, `if`, `for`,
 `while`, `return`, `try`, `function`, `call_stmt`, `block_call`. Expressions: `num str bool null name list dict bin un
