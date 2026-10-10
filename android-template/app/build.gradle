@@ -1,0 +1,31 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    // Fixed code namespace; the user-facing application id is set below.
+    namespace 'com.apppanrom.shell'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "__APPLICATION_ID__"
+        minSdk 24
+        targetSdk 34
+        versionCode __VERSION_CODE__
+        versionName "__VERSION_NAME__"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.11.0'
+}

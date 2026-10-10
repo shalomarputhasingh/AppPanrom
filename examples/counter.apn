@@ -1,0 +1,27 @@
+# Counter - global variables are the app state; the screen redraws after every event.
+app_uruvakku("Counter")
+app_id_set("com.apppanrom.counter")
+
+mari count = 0
+
+function plus():
+    count = count + 1
+
+function minus():
+    enna_na count > 0:
+        count = count - 1
+    illana:
+        toast_kaattu("Count 0-ku keela poga mudiyaadhu")
+
+function reset():
+    count = 0
+
+screen_uruvakku("home", style={"background": "#EEF2FF"}):
+    screen_title("Counter")
+    center_ama(style={"padding": 24, "gap": 20}):
+        text_kaattu("Count: " + str(count), style={"font_size": 36, "font_weight": "bold", "text_color": "#312E81"})
+        progress_kaattu(min(count * 10, 100), label="Progress to 10")
+        row_uruvakku(style={"gap": 12}):
+            button("-", click_pannumbodhu=minus, style={"background": "#EF4444", "corner_radius": 24, "width": 64})
+            button("+", click_pannumbodhu=plus, style={"background": "#10B981", "corner_radius": 24, "width": 64})
+        button("Reset", click_pannumbodhu=reset, style={"background": "#6B7280"})

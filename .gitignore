@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+# Node
+node_modules/
+frontend/dist/
+# Local runtime data (projects, builds, APKs, Gradle cache) - never commit
+data/
+backend/data/
+# Secrets / signing material - never commit
+*.keystore
+*.jks
+.env
+.env.*
+local.properties
