@@ -794,6 +794,8 @@
     '.ap-root[data-design] .ap-selected{outline:2px solid #2563eb!important;outline-offset:-2px}',
     '.ap-empty{min-height:56px;border:1.5px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center}',
     '.ap-empty::after{content:"Drop components here";color:var(--muted);font-size:12px}',
+    '.ap-clay{transition:transform .08s ease,filter .08s ease}',
+    'button.ap-clay:active:not(:disabled){transform:translateY(3px) scale(.985);filter:brightness(.97)}',
     '.ap-drop-inside{outline:2px dashed #2563eb!important;outline-offset:-2px;background-image:linear-gradient(rgba(37,99,235,.08),rgba(37,99,235,.08))}',
     '.ap-drop-ind{position:absolute;background:#2563eb;pointer-events:none;z-index:20;border-radius:2px;display:none}',
     '.ap-toast{position:absolute;left:16px;right:16px;bottom:24px;background:#111827;color:#fff;padding:10px 14px;border-radius:10px;z-index:11;font-size:14px;text-align:center;overflow-wrap:anywhere}',
@@ -802,6 +804,38 @@
   var ALIGN = { start: 'flex-start', center: 'center', end: 'flex-end', stretch: 'stretch' };
   var JUSTIFY = { start: 'flex-start', center: 'center', end: 'flex-end', space_between: 'space-between', space_around: 'space-around' };
   var WEIGHT = { normal: '400', medium: '500', bold: '700' };
+
+  var SHADOWS = {
+    none: 'none',
+    soft: '0 2px 6px rgba(0,0,0,.15)',
+    medium: '0 6px 16px rgba(0,0,0,.20)',
+    strong: '0 12px 28px rgba(0,0,0,.28)'
+  };
+
+  /** "#RGB"/"#RRGGBB" -> [r,g,b]; colours are validated before they get here, anything else yields null. */
+  function hexRgb(h) {
+    var m = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(String(h));
+    if (!m) return null;
+    var x = m[1].length === 3 ? m[1].replace(/./g, '$&$&') : m[1];
+    return [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2, 4), 16), parseInt(x.slice(4, 6), 16)];
+  }
+  function mix(rgb, to, t) {
+    return rgb.map(function (c, i) { return Math.round(c + (to[i] - c) * t); });
+  }
+  function rgba(rgb, a) { return 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + a + ')'; }
+
+  /** Claymorphism: a soft, puffy 3D look derived from the element's own background colour (tinted shadows, inner highlight). */
+  function clayShadow(bg) {
+    var base = hexRgb(bg) || [229, 231, 235];
+    var dark = mix(base, [0, 0, 0], 0.38);
+    var deep = mix(base, [0, 0, 0], 0.22);
+    var light = mix(base, [255, 255, 255], 0.65);
+    return [
+      '0 10px 20px ' + rgba(dark, 0.45),            // soft coloured drop shadow
+      'inset -6px -6px 12px ' + rgba(deep, 0.40),    // inner shade, bottom right
+      'inset 6px 6px 12px ' + rgba(light, 0.75)      // inner highlight, top left
+    ].join(',');
+  }
 
   function applyStyle(el, s, isCol) {
     function px(n) { return n + 'px'; }
@@ -820,6 +854,15 @@
     if ('font_size' in s) el.style.fontSize = px(s.font_size);
     if ('font_weight' in s) el.style.fontWeight = WEIGHT[s.font_weight];
     if ('text_align' in s) el.style.textAlign = s.text_align;
+    if (s.clay === true) {
+      el.classList.add('ap-clay');
+      el.style.boxShadow = clayShadow(s.background);
+      if (!('corner_radius' in s)) el.style.borderRadius = '24px';
+      if (!('border_width' in s)) el.style.border = '0';
+    }
+    if ('shadow' in s && SHADOWS[s.shadow]) {
+      el.style.boxShadow = s.clay === true && s.shadow !== 'none' ? el.style.boxShadow + ',' + SHADOWS[s.shadow] : SHADOWS[s.shadow];
+    }
     if ('opacity' in s) el.style.opacity = String(s.opacity);
     if ('visible' in s && !s.visible) el.style.display = 'none';
     if ('width' in s) { var w = size(s.width, 'w'); if (w) el.style.width = w; }

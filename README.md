@@ -39,7 +39,7 @@ screen_uruvakku("home"):
 | Language: variables, expressions, `enna_na`/`illana_enna`/`illana`, `ovvoru`, `irukkura_varai`, functions, `try/catch`, lists/dicts | ✅ implemented + tested |
 | Diagnostics with file/line/column + suggestions | ✅ |
 | Components: title, text, button, text/password/number inputs, checkbox, toggle, dropdown, image, list, progress, loading, divider, card, column, row, center | ✅ |
-| Layout + validated, component-scoped styles; light/dark theme | ✅ (subset, see language doc) |
+| Layout + validated, component-scoped styles; light/dark theme; `shadow` and **claymorphism** (`clay`) | ✅ (subset, see language doc) |
 | Multi-screen navigation + back, screen data | ✅ |
 | App-local storage (`data_*`) | ✅ (not encrypted) |
 | Studio: projects (create/open/rename/delete), editor with highlighting + live diagnostics, console, live phone preview, settings, reference, examples | ✅ |
@@ -48,7 +48,7 @@ screen_uruvakku("home"):
 | Release signing + release APK + AAB (keystore from environment, signature independently verified when tools are available) | ✅ built and signature-verified for real (apksigner / jarsigner); install on a device not tested |
 | Persistence of projects/builds across restarts (SQLite + files) | ✅ |
 | Android build pipeline (generate project → Gradle → verify → download) | ✅ real `assembleDebug` / release APK / AAB succeeded with a real SDK; **⚠ never installed or launched on a device/emulator** (see below) |
-| Network APIs (`api_get`…), runtime-permission device capabilities (camera, location…), dialogs, gradients/shadows/custom fonts, extra themes, "fun mode" | ❌ not implemented (the compiler says so) |
+| Network APIs (`api_get`…), runtime-permission device capabilities (camera, location…), dialogs, gradients/custom fonts, extra themes, "fun mode" | ❌ not implemented (the compiler says so) |
 | Authentication / multi-user | ❌ local single-user MVP |
 
 ### Honest note on APK builds

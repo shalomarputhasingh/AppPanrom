@@ -47,7 +47,9 @@
       "border_width",
       "border_color",
       "opacity",
-      "visible"
+      "visible",
+      "shadow",
+      "clay"
     ],
     "text": [
       "text_color",
@@ -157,11 +159,22 @@
     },
     "visible": {
       "type": "bool"
+    },
+    "shadow": {
+      "type": "enum",
+      "values": [
+        "none",
+        "soft",
+        "medium",
+        "strong"
+      ]
+    },
+    "clay": {
+      "type": "bool"
     }
   },
   "unsupported_styles": [
     "gradient",
-    "shadow",
     "font_family",
     "text_decor",
     "line_height"

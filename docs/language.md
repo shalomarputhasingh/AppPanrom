@@ -156,7 +156,7 @@ literals, and for dynamic values the offending key is ignored with a console war
 
 | Group | Keys |
 |---|---|
-| box | `background`, `padding`, `margin`, `width`, `height`, `corner_radius`, `border_width`, `border_color`, `opacity`, `visible` |
+| box | `background`, `padding`, `margin`, `width`, `height`, `corner_radius`, `border_width`, `border_color`, `opacity`, `visible`, `shadow`, `clay` |
 | text | `text_color`, `font_size`, `font_weight`, `text_align` |
 | flow | `gap`, `align`, `justify`, `wrap`, `scroll` |
 
@@ -181,6 +181,8 @@ literals, and for dynamic values the offending key is ignored with a console war
 | `wrap` | `true` / `false` |
 | `scroll` | `true` / `false` |
 | `visible` | `true` / `false` |
+| `shadow` | `none` \| `soft` \| `medium` \| `strong` (drop shadow) |
+| `clay` | `true` / `false` - claymorphism (see below) |
 
 Layout notes: containers stack children vertically (`column_uruvakku`, the default for `card_uruvakku`), horizontally
 (`row_uruvakku`) or centre them on both axes (`center_ama`). `align` is the cross axis (default `stretch`; rows
@@ -188,7 +190,12 @@ default to `center`), `justify` the main axis (default `start`). `scroll` contro
 default). `background` on a button sets its colour; on a screen, the screen colour. Colours accept only `#RGB` / `#RRGGBB`.
 `app_theme_set("light" | "dark")` switches the default palette; explicit style colours always win.
 
-**Not supported yet** (compile error): `gradient`, `shadow`, `font_family`, `text_decor`, `line_height`, the other named
+**Claymorphism (`clay`).** `style={"background": "#A78BFA", "clay": true}` gives the soft, puffy, 3D "clay" look: a tinted drop shadow, an inner
+highlight (top-left) and an inner shade (bottom-right), all computed from the element's own `background` colour (so set one; without it a neutral grey is
+used for the shadows). Unless you set them, `corner_radius` defaults to 24 and the border to none. Buttons sink slightly when pressed. Use big `corner_radius`
+values, pastel backgrounds and generous `padding` for the best result. `shadow` can be combined with `clay` to add an extra outer shadow.
+
+**Not supported yet** (compile error): `gradient`, `font_family`, `text_decor`, `line_height`, the other named
 themes. Responsive behaviour comes only from flex layout and percentage widths (no breakpoints).
 
 ## 7. Standard library

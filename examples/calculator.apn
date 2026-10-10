@@ -1,4 +1,4 @@
-# Colourful calculator - built with AppPanrom.
+# Claymorphism calculator - built with AppPanrom (style key `clay`: soft, puffy, 3D pastel look).
 # State: `shown` is the text on the display, `acc` the stored left operand, `op` the pending operator,
 # `fresh` means the next digit starts a new number.
 app_uruvakku("Calculator")
@@ -156,39 +156,39 @@ function press_percent():
     fresh = true
 
 
-screen_uruvakku("home", style={"background": "#1E1B4B"}):
+screen_uruvakku("home", style={"background": "#E9E4FF"}):
     screen_title("Calculator")
-    column_uruvakku(style={"padding": 16, "gap": 12}):
-        card_uruvakku(style={"background": "#312E81", "padding": 20, "corner_radius": 28, "gap": 4}):
-            text_kaattu(history, style={"text_color": "#A5B4FC", "font_size": 18, "text_align": "right", "height": 24})
-            text_kaattu(shown, style={"text_color": "#FDE68A", "font_size": 52, "font_weight": "bold", "text_align": "right"})
+    column_uruvakku(style={"padding": 20, "gap": 18}):
+        card_uruvakku(style={"background": "#FDE68A", "clay": true, "padding": 22, "corner_radius": 36, "gap": 4}):
+            text_kaattu(history, style={"text_color": "#92400E", "font_size": 18, "text_align": "right", "height": 24})
+            text_kaattu(shown, style={"text_color": "#3B1F6E", "font_size": 52, "font_weight": "bold", "text_align": "right"})
 
-        row_uruvakku(style={"gap": 8, "justify": "space_between"}):
-            button("C", click_pannumbodhu=press_clear, style={"background": "#EF4444", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
-            button("+/-", click_pannumbodhu=press_sign, style={"background": "#818CF8", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
-            button("%", click_pannumbodhu=press_percent, style={"background": "#818CF8", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
-            button("/", click_pannumbodhu=press_divide, style={"background": "#F97316", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+        row_uruvakku(style={"gap": 10, "justify": "space_between"}):
+            button("C", click_pannumbodhu=press_clear, style={"background": "#FCA5A5", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})
+            button("+/-", click_pannumbodhu=press_sign, style={"background": "#93C5FD", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})
+            button("%", click_pannumbodhu=press_percent, style={"background": "#93C5FD", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})
+            button("/", click_pannumbodhu=press_divide, style={"background": "#FDBA74", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})
 
-        row_uruvakku(style={"gap": 8, "justify": "space_between"}):
-            button("7", click_pannumbodhu=press_7, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
-            button("8", click_pannumbodhu=press_8, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
-            button("9", click_pannumbodhu=press_9, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
-            button("x", click_pannumbodhu=press_times, style={"background": "#F97316", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+        row_uruvakku(style={"gap": 10, "justify": "space_between"}):
+            button("7", click_pannumbodhu=press_7, style={"background": "#C4B5FD", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})
+            button("8", click_pannumbodhu=press_8, style={"background": "#C4B5FD", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})
+            button("9", click_pannumbodhu=press_9, style={"background": "#C4B5FD", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})
+            button("x", click_pannumbodhu=press_times, style={"background": "#FDBA74", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})
 
-        row_uruvakku(style={"gap": 8, "justify": "space_between"}):
-            button("4", click_pannumbodhu=press_4, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
-            button("5", click_pannumbodhu=press_5, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
-            button("6", click_pannumbodhu=press_6, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
-            button("-", click_pannumbodhu=press_minus, style={"background": "#F97316", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+        row_uruvakku(style={"gap": 10, "justify": "space_between"}):
+            button("4", click_pannumbodhu=press_4, style={"background": "#C4B5FD", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})
+            button("5", click_pannumbodhu=press_5, style={"background": "#C4B5FD", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})
+            button("6", click_pannumbodhu=press_6, style={"background": "#C4B5FD", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})
+            button("-", click_pannumbodhu=press_minus, style={"background": "#FDBA74", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})
 
-        row_uruvakku(style={"gap": 8, "justify": "space_between"}):
-            button("1", click_pannumbodhu=press_1, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
-            button("2", click_pannumbodhu=press_2, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
-            button("3", click_pannumbodhu=press_3, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
-            button("+", click_pannumbodhu=press_plus, style={"background": "#F97316", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+        row_uruvakku(style={"gap": 10, "justify": "space_between"}):
+            button("1", click_pannumbodhu=press_1, style={"background": "#C4B5FD", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})
+            button("2", click_pannumbodhu=press_2, style={"background": "#C4B5FD", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})
+            button("3", click_pannumbodhu=press_3, style={"background": "#C4B5FD", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})
+            button("+", click_pannumbodhu=press_plus, style={"background": "#FDBA74", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})
 
-        row_uruvakku(style={"gap": 8, "justify": "space_between"}):
-            button("0", click_pannumbodhu=press_0, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
-            button(".", click_pannumbodhu=press_dot, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
-            button("<", click_pannumbodhu=press_back, style={"background": "#14B8A6", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
-            button("=", click_pannumbodhu=press_equals, style={"background": "#EC4899", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+        row_uruvakku(style={"gap": 10, "justify": "space_between"}):
+            button("0", click_pannumbodhu=press_0, style={"background": "#C4B5FD", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})
+            button(".", click_pannumbodhu=press_dot, style={"background": "#C4B5FD", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})
+            button("<", click_pannumbodhu=press_back, style={"background": "#86EFAC", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})
+            button("=", click_pannumbodhu=press_equals, style={"background": "#F9A8D4", "text_color": "#3B1F6E", "clay": true, "corner_radius": 28, "width": "22%", "height": 70, "font_size": 28, "font_weight": "bold"})

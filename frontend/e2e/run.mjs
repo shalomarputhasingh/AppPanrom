@@ -378,6 +378,38 @@ screen_uruvakku("home"):
       if (errs.length) throw new Error('console errors in bundle: ' + errs.join('; '));
     } finally { srv.close(); }
   });
+  await step('claymorphism calculator: clay shadows computed in Chromium, calculations work, pressed state', async () => {
+    const out = path.join(data, 'calc-project');
+    const r = spawnSync('python3', ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', 'calculator.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
+    if (r.status !== 0) throw new Error('generate failed: ' + r.stderr);
+    const www = path.join(out, 'app/src/main/assets/www');
+    const srv = createServer((req, res) => {
+      const f = path.join(www, req.url.split('?')[0].replace(/^\/assets\/www\//, ''));
+      try { res.setHeader('content-type', f.endsWith('.js') ? 'text/javascript' : 'text/html'); res.end(readFileSync(f)); } catch { res.statusCode = 404; res.end(); }
+    }).listen(8798);
+    try {
+      const p3 = await browser.newPage({ viewport: { width: 390, height: 800 } });
+      const errs = [];
+      p3.on('pageerror', (e) => errs.push(e.message));
+      await p3.goto('http://127.0.0.1:8798/assets/www/index.html');
+      const btn = p3.getByRole('button', { name: '7', exact: true });
+      await btn.waitFor();
+      const shadow = await btn.evaluate((el) => getComputedStyle(el).boxShadow);
+      if (!/inset/.test(shadow) || (shadow.match(/rgba?\(/g) || []).length < 3) throw new Error('clay box-shadow missing: ' + shadow);
+      const radius = await btn.evaluate((el) => getComputedStyle(el).borderRadius);
+      if (radius !== '28px') throw new Error('corner radius ' + radius);
+      for (const k of ['6', 'x', '7', '=']) await p3.getByRole('button', { name: k, exact: true }).click();
+      await p3.getByText('42', { exact: true }).waitFor();
+      const box = await btn.boundingBox();
+      await p3.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await p3.mouse.down();
+      const pressed = await btn.evaluate((el) => getComputedStyle(el).transform);
+      await p3.mouse.up();
+      if (pressed === 'none') throw new Error('no pressed transform on clay button');
+      await shot(p3, '07-clay-calculator');
+      if (errs.length) throw new Error('page errors: ' + errs.join('; '));
+    } finally { srv.close(); }
+  });
   await step('no uncaught page errors', async () => {
     if (pageErrors.length) throw new Error(pageErrors.join('; '));
   });

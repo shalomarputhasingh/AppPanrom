@@ -137,7 +137,11 @@ def test_style_validation():
     assert "bad_style_value" in codes(s('{"font_size": 4}'))[1]
     assert "bad_style_value" in codes(s('{"text_align": "middle"}'))[1]
     assert "unknown_style" in codes(s('{"colour": "#fff"}'))[1]
-    assert "unsupported_style" in codes(s('{"shadow": 4}'))[1]
+    assert "unsupported_style" in codes(s('{"gradient": "#fff"}'))[1]
+    assert compile_source(s('{"shadow": "soft", "clay": true, "background": "#A78BFA"}')).ok
+    assert "bad_style_value" in codes(s('{"shadow": 4}'))[1]
+    assert "bad_style_value" in codes(s('{"shadow": "huge"}'))[1]
+    assert "bad_style_value" in codes(s('{"clay": "yes"}'))[1]
     assert "style_not_applicable" in codes(s('{"gap": 4}'))[1]
     assert "bad_style" in codes(s('5'))[1]
 

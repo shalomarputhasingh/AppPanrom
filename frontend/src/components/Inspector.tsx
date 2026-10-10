@@ -20,7 +20,7 @@ const LABELS: Record<string, string> = {
   background: 'Background', text_color: 'Text color', border_color: 'Border color', padding: 'Padding', margin: 'Margin', gap: 'Gap',
   corner_radius: 'Corner radius', border_width: 'Border width', font_size: 'Font size', font_weight: 'Font weight', text_align: 'Text align',
   opacity: 'Opacity', width: 'Width', height: 'Height', align: 'Align (cross axis)', justify: 'Justify (main axis)', wrap: 'Wrap',
-  scroll: 'Scroll', visible: 'Visible', click_pannumbodhu: 'On click', change_aagumbodhu: 'On change', submit_pannumbodhu: 'On submit',
+  scroll: 'Scroll', visible: 'Visible', shadow: 'Shadow', clay: 'Clay (3D soft)', click_pannumbodhu: 'On click', change_aagumbodhu: 'On change', submit_pannumbodhu: 'On submit',
 };
 const label = (k: string) => LABELS[k] ?? k;
 
