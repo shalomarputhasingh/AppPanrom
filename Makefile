@@ -10,7 +10,7 @@ test-backend:
 	cd backend && python3 -m pytest -q
 
 test-runtime:
-	cd runtime && node --test test/runtime.test.mjs
+	cd runtime && node --test test/*.test.mjs
 
 test-frontend:
 	cd frontend && npm run typecheck && npm test

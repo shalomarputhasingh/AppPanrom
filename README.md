@@ -197,7 +197,7 @@ published app) and never commit them.
 | Release buttons are disabled | The three `APPANROM_KEYSTORE*` variables were not set when the server started |
 
 Development mode with hot reload (two terminals): `make dev-backend` (API on :8000) and `make dev-frontend` (Studio on :5173).
-Press **▶ Run** (or Ctrl+Enter) to compile and preview. Sample programs are in `examples/` and in the Studio's **Reference → Examples**.
+Press **▶ Run** (or Ctrl+Enter) to compile and preview. Sample programs are in `examples/` and in the Studio's **Reference → Examples**. `examples/calculator.apn` + `examples/calculator-icon.png` is a full colourful calculator app (upload the PNG in Settings → App icon, then build).
 
 ### Configuration (environment variables)
 

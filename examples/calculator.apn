@@ -1,0 +1,194 @@
+# Colourful calculator - built with AppPanrom.
+# State: `shown` is the text on the display, `acc` the stored left operand, `op` the pending operator,
+# `fresh` means the next digit starts a new number.
+app_uruvakku("Calculator")
+app_id_set("com.apppanrom.calculator")
+app_version_set("1.0.0")
+
+mari shown = "0"
+mari acc = 0
+mari op = ""
+mari fresh = true
+mari history = ""
+
+function clean(x):
+    # tidy floating point noise such as 0.1 + 0.2
+    return str(round(x, 8))
+
+function calc(a, o, b):
+    enna_na o == "+":
+        return a + b
+    enna_na o == "-":
+        return a - b
+    enna_na o == "x":
+        return a * b
+    enna_na o == "/":
+        enna_na b == 0:
+            return null
+        return a / b
+    return b
+
+function digit(d):
+    enna_na fresh:
+        shown = d
+        fresh = false
+    illana_enna shown == "0":
+        shown = d
+    illana_enna text_length(shown) < 12:
+        shown = shown + d
+
+function press_0():
+    digit("0")
+
+function press_1():
+    digit("1")
+
+function press_2():
+    digit("2")
+
+function press_3():
+    digit("3")
+
+function press_4():
+    digit("4")
+
+function press_5():
+    digit("5")
+
+function press_6():
+    digit("6")
+
+function press_7():
+    digit("7")
+
+function press_8():
+    digit("8")
+
+function press_9():
+    digit("9")
+
+function press_dot():
+    enna_na fresh:
+        shown = "0."
+        fresh = false
+    illana_enna not text_contains(shown, "."):
+        shown = shown + "."
+
+function apply_pending():
+    mari r = calc(acc, op, float(shown))
+    enna_na r == null:
+        shown = "Error"
+        op = ""
+        history = ""
+        fresh = true
+        return false
+    shown = clean(r)
+    return true
+
+function set_op(o):
+    enna_na op != "" and not fresh:
+        enna_na not apply_pending():
+            return null
+    illana_enna shown == "Error":
+        return null
+    acc = float(shown)
+    op = o
+    history = shown + " " + o
+    fresh = true
+
+function press_plus():
+    set_op("+")
+
+function press_minus():
+    set_op("-")
+
+function press_times():
+    set_op("x")
+
+function press_divide():
+    set_op("/")
+
+function press_equals():
+    enna_na op == "" or fresh and op == "":
+        return null
+    mari left = shown
+    mari o = op
+    enna_na apply_pending():
+        history = clean(acc) + " " + o + " " + left + " ="
+    op = ""
+    fresh = true
+
+function press_clear():
+    shown = "0"
+    acc = 0
+    op = ""
+    history = ""
+    fresh = true
+
+function press_back():
+    enna_na fresh or shown == "Error":
+        return null
+    enna_na text_length(shown) <= 1:
+        shown = "0"
+    illana:
+        mari keep = ""
+        ovvoru i in range(text_length(shown) - 1):
+            keep = keep + shown[i]
+        shown = keep
+    enna_na shown == "" or shown == "-":
+        shown = "0"
+
+function press_sign():
+    enna_na shown == "0" or shown == "Error":
+        return null
+    enna_na shown[0] == "-":
+        mari rest = ""
+        ovvoru i in range(text_length(shown) - 1):
+            rest = rest + shown[i + 1]
+        shown = rest
+    illana:
+        shown = "-" + shown
+
+function press_percent():
+    enna_na shown == "Error":
+        return null
+    shown = clean(float(shown) / 100)
+    fresh = true
+
+
+screen_uruvakku("home", style={"background": "#1E1B4B"}):
+    screen_title("Calculator")
+    column_uruvakku(style={"padding": 16, "gap": 12}):
+        card_uruvakku(style={"background": "#312E81", "padding": 20, "corner_radius": 28, "gap": 4}):
+            text_kaattu(history, style={"text_color": "#A5B4FC", "font_size": 18, "text_align": "right", "height": 24})
+            text_kaattu(shown, style={"text_color": "#FDE68A", "font_size": 52, "font_weight": "bold", "text_align": "right"})
+
+        row_uruvakku(style={"gap": 8, "justify": "space_between"}):
+            button("C", click_pannumbodhu=press_clear, style={"background": "#EF4444", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+            button("+/-", click_pannumbodhu=press_sign, style={"background": "#818CF8", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+            button("%", click_pannumbodhu=press_percent, style={"background": "#818CF8", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+            button("/", click_pannumbodhu=press_divide, style={"background": "#F97316", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+
+        row_uruvakku(style={"gap": 8, "justify": "space_between"}):
+            button("7", click_pannumbodhu=press_7, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+            button("8", click_pannumbodhu=press_8, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+            button("9", click_pannumbodhu=press_9, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+            button("x", click_pannumbodhu=press_times, style={"background": "#F97316", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+
+        row_uruvakku(style={"gap": 8, "justify": "space_between"}):
+            button("4", click_pannumbodhu=press_4, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+            button("5", click_pannumbodhu=press_5, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+            button("6", click_pannumbodhu=press_6, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+            button("-", click_pannumbodhu=press_minus, style={"background": "#F97316", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+
+        row_uruvakku(style={"gap": 8, "justify": "space_between"}):
+            button("1", click_pannumbodhu=press_1, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+            button("2", click_pannumbodhu=press_2, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+            button("3", click_pannumbodhu=press_3, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+            button("+", click_pannumbodhu=press_plus, style={"background": "#F97316", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+
+        row_uruvakku(style={"gap": 8, "justify": "space_between"}):
+            button("0", click_pannumbodhu=press_0, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+            button(".", click_pannumbodhu=press_dot, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+            button("<", click_pannumbodhu=press_back, style={"background": "#14B8A6", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
+            button("=", click_pannumbodhu=press_equals, style={"background": "#EC4899", "text_color": "#FFFFFF", "corner_radius": 20, "width": "23%", "height": 68, "font_size": 28, "font_weight": "bold"})
