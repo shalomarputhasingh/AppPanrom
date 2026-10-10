@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .diagnostics import SyntaxProblem
+from .tanglish import canonical
 
 KEYWORDS = {
     "mari", "function", "return", "enna_na", "illana_enna", "illana",
@@ -87,7 +88,7 @@ def tokenize(source: str) -> list[Token]:
                 j = i
                 while j < n and (raw[j].isalnum() or raw[j] == "_"):
                     j += 1
-                word = raw[i:j]
+                word = canonical(raw[i:j])  # Tanglish names (seyal, batan, ...) are mapped to the canonical ones
                 tokens.append(Token("KEYWORD" if word in KEYWORDS else "NAME", word, lineno, col, j + 1))
                 i = j
             elif raw[i : i + 2] in TWO_CHAR_OPS:

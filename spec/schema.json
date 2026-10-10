@@ -947,5 +947,67 @@
       "android": "android.permission.VIBRATE",
       "reason": "vibrate_pannu makes the phone vibrate"
     }
+  },
+  "tanglish": {
+    "keywords": {
+      "function": "seyal",
+      "return": "thirumbi_kudu",
+      "try": "muyarchi",
+      "catch": "pidi",
+      "in": "ulle",
+      "and": "matrum",
+      "or": "allathu",
+      "not": "illaadha",
+      "true": "sari",
+      "false": "thappu",
+      "null": "onnum_illa"
+    },
+    "components": {
+      "title": "thalaippu",
+      "button": "batan",
+      "password_input": "ragasiya_input",
+      "number_input": "ennai_input"
+    },
+    "options": {
+      "label": "peyar",
+      "placeholder": "kurippu",
+      "initial": "modhal",
+      "enabled": "iyakkam",
+      "options": "thervugal",
+      "alt": "vilakkam"
+    },
+    "functions": {
+      "debug_log": "pathivu_pannu",
+      "int": "muzhu_ennai",
+      "float": "thasama_ennai",
+      "str": "text_aakku",
+      "bool": "unmai_ah",
+      "type_of": "vagai",
+      "text_length": "text_neelam",
+      "text_upper": "text_peria_ezhuthu",
+      "text_lower": "text_chinna_ezhuthu",
+      "text_trim": "text_suththam",
+      "text_replace": "text_maathu",
+      "text_split": "text_pirichu",
+      "text_join": "text_serthu",
+      "text_contains": "text_irukka",
+      "length": "neelam",
+      "append": "serthu",
+      "remove": "neekku",
+      "sort": "varisai_paduthu",
+      "range": "ellai",
+      "dict_get": "dict_edu",
+      "dict_keys": "dict_saavigal",
+      "min": "kuraivu",
+      "max": "athigam",
+      "sum": "kootu",
+      "round": "suththam_pannu",
+      "abs": "nermai",
+      "json_encode": "json_aakku",
+      "json_decode": "json_padi",
+      "now_iso": "ippo",
+      "random_number": "random_ennai",
+      "random_choice": "random_edu"
+    }
   }
 }

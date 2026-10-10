@@ -46,6 +46,13 @@ export function ReferencePanel({ spec, onUseExample }: Props) {
           <ul className="plain mono small">{Object.entries(spec.components).map(([k, v]) => <li key={k}>{v.doc}</li>)}</ul>
           <h4>Functions</h4>
           <ul className="plain mono small">{Object.entries(spec.functions).map(([k, v]) => <li key={k}>{v.doc}</li>)}</ul>
+          <h4>Tanglish vocabulary</h4>
+          <p className="muted small">Both columns work. Use Settings → Language to convert a whole file.</p>
+          <table className="vocab small mono">
+            <tbody>
+              {Object.values(spec.tanglish).flatMap((g) => Object.entries(g)).map(([en, ta]) => <tr key={en}><td>{en}</td><td>→</td><td><b>{ta}</b></td></tr>)}
+            </tbody>
+          </table>
           <h4>Style keys</h4>
           <ul className="plain mono small">
             {Object.entries(spec.styles).map(([k, v]) => (

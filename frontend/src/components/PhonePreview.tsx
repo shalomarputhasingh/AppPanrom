@@ -10,6 +10,8 @@ interface Props {
   runKey: number;
   projectId: string;
   errorCount: number;
+  /** false while the code does not compile: the preview keeps the last good version and says so. */
+  codeOk: boolean;
   onLog(level: LogLine['level'], text: string): void;
   onRestart(): void;
 }
@@ -28,14 +30,28 @@ function saveStore(id: string, data: Record<string, string>) {
   try { localStorage.setItem(storeKey(id), JSON.stringify(data)); } catch { /* storage unavailable: preview data just won't persist */ }
 }
 
-export function PhonePreview({ state, ir, runKey, projectId, errorCount, onLog, onRestart }: Props) {
+export function PhonePreview({ state, ir, runKey, projectId, errorCount, codeOk, onLog, onRestart }: Props) {
   const frame = useRef<HTMLIFrameElement>(null);
   const token = useMemo(() => Math.random().toString(36).slice(2) + runKey, [runKey]);
+  // The document is rebuilt only when the app is (re)started. New code afterwards is pushed into the running app (hot reload),
+  // so typing never reloads the iframe: no flash, state is kept, only changed components are patched.
+  const latest = useRef(ir);
+  latest.current = ir;
+  const sent = useRef<unknown>(null);
   const doc = useMemo(
-    () => (state === 'ready' && ir ? buildPreviewDoc(ir, loadStore(projectId), token) : null),
+    () => {
+      if (state !== 'ready' || !latest.current) return null;
+      sent.current = latest.current;
+      return buildPreviewDoc(latest.current, loadStore(projectId), token);
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state, ir, runKey, projectId, token],
+    [state === 'ready', runKey, projectId, token],
   );
+  useEffect(() => {
+    if (!doc || !ir || ir === sent.current) return;
+    sent.current = ir;
+    frame.current?.contentWindow?.postMessage({ type: 'ap-update', token, ir }, '*');
+  }, [ir, doc, token]);
 
   useEffect(() => {
     const on = (e: MessageEvent) => {
@@ -83,6 +99,11 @@ export function PhonePreview({ state, ir, runKey, projectId, errorCount, onLog, 
         <button className="btn" onClick={onRestart} disabled={state !== 'ready'}>Restart app</button>
         <button className="btn" onClick={resetData} disabled={state !== 'ready'} title="Clears data saved with data_save_pannu in the preview">Reset app data</button>
       </div>
+      {state === 'ready' && (
+        <p className={`live-badge ${codeOk ? 'ok' : 'paused'}`} role="status" data-testid="live-badge">
+          {codeOk ? '● Live: edits appear here instantly' : '⏸ Paused: fix the errors in your code (showing the last working version)'}
+        </p>
+      )}
       <p className="muted small center-text">Live preview — not an APK. Same runtime as the Android app.</p>
     </section>
   );

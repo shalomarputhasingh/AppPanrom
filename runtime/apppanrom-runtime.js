@@ -747,6 +747,23 @@
       return false;
     };
     rt.getInput = getInput;
+    /** Hot reload: capture the app's state, and re-apply it to a runtime built from newly compiled code (see mount().hot). */
+    function exprKey(g) { return JSON.stringify(g.e, function (k, v) { return k === 'pos' ? undefined : v; }); }
+    rt.snapshot = function () {
+      var lets = {};
+      ir.globals.forEach(function (g) { lets[g.n] = exprKey(g); });
+      return { globals: new Map(globals), lets: lets, inputs: Object.assign(newDict(), inputs), screenData: Object.assign(newDict(), screenData), stack: stack.slice(), kinds: Object.keys(inputInfo).reduce(function (a, k) { a[k] = inputInfo[k].kind; return a; }, {}) };
+    };
+    rt.restore = function (snap) {
+      ir.globals.forEach(function (g) {
+        // keep the running value unless the starting value itself was edited (then the edit should be visible)
+        if (snap.globals.has(g.n) && snap.lets[g.n] === exprKey(g)) globals.set(g.n, snap.globals.get(g.n));
+      });
+      Object.keys(snap.inputs).forEach(function (k) { if (inputInfo[k] && inputInfo[k].kind === snap.kinds[k]) inputs[k] = snap.inputs[k]; });
+      Object.keys(snap.screenData).forEach(function (k) { screenData[k] = snap.screenData[k]; });
+      var kept = snap.stack.filter(function (n) { return ir.screens[n]; });
+      if (kept.length) stack = kept;
+    };
     rt.callFunction = function (name, args) { return guarded(function () { return callUser(name, ir.functions[name], args || [], null); }); };
     rt.stdlibNames = Object.keys(STD);
     return rt;
@@ -1404,6 +1421,23 @@
         if (ir.screens[screen]) rt.setScreen(screen);
         rt.subscribe(render);
         render();
+      },
+      /** Hot reload for the live preview: swap in new code, keep variables / inputs / current screen, patch only what changed. */
+      hot: function (newIr) {
+        var snap = rt.snapshot();
+        ir = newIr;
+        app.setAttribute('data-theme', ir.app.theme === 'dark' ? 'dark' : 'light');
+        var next = createRuntime(ir, realHost);
+        try { next.init(); } catch (e) {
+          if (!e || !e.isApError) throw e;
+          realHost.log('error', 'Startup failed. ' + next.format(e));
+          return false;
+        }
+        next.restore(snap);
+        rt = next;
+        rt.subscribe(render);
+        render();
+        return true;
       },
       runtime: rt,
       select: function (line) { select(line, true); },

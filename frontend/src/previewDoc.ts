@@ -29,8 +29,15 @@ export function buildPreviewDoc(ir: unknown, store: Record<string, string>, toke
     keys: function () { return Object.keys(data); }
   };
   var ir = ${jsonForScript(ir)};
+  var ctrl = null;
+  // Hot reload: the Studio sends freshly compiled code; the app keeps its state and only changed components are patched.
+  window.addEventListener('message', function (e) {
+    var m = e.data;
+    if (e.source !== parent || !m || m.token !== TOKEN || m.type !== 'ap-update' || !ctrl) return;
+    try { ctrl.hot(m.ir); } catch (err) { post({ type: 'ap-log', level: 'error', text: 'Hot reload failed: ' + (err && err.message) }); }
+  });
   try {
-    AppPanrom.mount(ir, document.getElementById('app'), {
+    ctrl = AppPanrom.mount(ir, document.getElementById('app'), {
       namespace: 'preview',
       storage: storage,
       log: function (level, text) { post({ type: 'ap-log', level: level, text: text }); }

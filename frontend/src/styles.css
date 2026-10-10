@@ -209,3 +209,13 @@ kbd { font: 11.5px var(--mono); background: var(--panel-2); border: 1px solid va
 .chip { border: 1px solid var(--border); background: var(--panel); border-radius: 12px; padding: 2px 9px; font-size: 12px; cursor: pointer; }
 .chip:hover:not(:disabled) { border-color: var(--accent); } .chip.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 .chip:disabled { opacity: .5; }
+.set-section { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; background: var(--panel); }
+.set-section > summary { cursor: pointer; font-weight: 700; padding: 2px 0; }
+.set-hint { margin: 2px 0 6px; }
+.set-list { gap: 6px; margin: 6px 0; } .set-item { display: flex; gap: 6px; align-items: center; }
+.set-item input { flex: 1; min-width: 0; } .var-name { flex: none; min-width: 64px; }
+.check-row { flex-direction: row !important; align-items: center; gap: 6px !important; }
+.set-section label { margin-top: 6px; }
+.ta-lead { color: var(--accent); font-weight: 600; }
+.vocab { border-collapse: collapse; } .vocab td { padding: 1px 8px 1px 0; }
+.live-badge { margin: 0; font-size: 12px; text-align: center; } .live-badge.ok { color: var(--ok); } .live-badge.paused { color: var(--warn); }

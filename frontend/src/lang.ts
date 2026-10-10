@@ -6,7 +6,9 @@ const KEYWORDS = new Set([
   'mari', 'function', 'return', 'enna_na', 'illana_enna', 'illana', 'ovvoru', 'in', 'irukkura_varai', 'try', 'catch',
   'and', 'or', 'not',
 ]);
-const ATOMS = new Set(['true', 'false', 'null']);
+const ATOMS = new Set(['true', 'false', 'null', 'sari', 'thappu', 'onnum_illa']);
+/** Tanglish keyword aliases (seyal, thirumbi_kudu, ...). Filled from the backend spec by builtinNames(). */
+const TA_KEYWORDS = new Set<string>();
 
 /** CodeMirror language for AppPanrom. `builtins` come from the backend spec so the editor never drifts from the language. */
 export function apppanromLanguage(builtins: Set<string>) {
@@ -28,7 +30,7 @@ export function apppanromLanguage(builtins: Set<string>) {
       if (stream.match(/^\d+(\.\d+)?/)) return 'number';
       if (stream.match(/^[A-Za-z_][A-Za-z0-9_]*/)) {
         const w = stream.current();
-        if (KEYWORDS.has(w)) return 'keyword';
+        if (KEYWORDS.has(w) || TA_KEYWORDS.has(w)) return 'keyword';
         if (ATOMS.has(w)) return 'atom';
         if (builtins.has(w)) return 'function';
         return 'variableName';
@@ -54,7 +56,11 @@ export const highlight = syntaxHighlighting(
 );
 
 export function builtinNames(spec: Spec): Set<string> {
+  const ta = spec.tanglish;
+  TA_KEYWORDS.clear();
+  if (ta) Object.values(ta.keywords).forEach((k) => { if (!ATOMS.has(k)) TA_KEYWORDS.add(k); });
   return new Set([
+    ...(ta ? [...Object.values(ta.components), ...Object.values(ta.functions)] : []),
     ...Object.keys(spec.components),
     ...Object.keys(spec.functions),
     ...Object.keys(spec.config_functions),

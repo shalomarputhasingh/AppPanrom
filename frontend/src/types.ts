@@ -19,6 +19,7 @@ export interface Diagnostic {
   file: string;
   end_col: number | null;
   suggestion: string | null;
+  ta?: string | null;
 }
 
 export interface CompileResult {
@@ -82,6 +83,15 @@ export interface Spec {
   styles: Record<string, { type: string; min?: number; max?: number; values?: string[] }>;
   style_groups: Record<string, string[]>;
   not_implemented: string[];
+  tanglish: { keywords: Record<string, string>; components: Record<string, string>; options: Record<string, string>; functions: Record<string, string> };
+}
+
+export interface AppInfo {
+  code: { name: string | null; id: string | null; version: string | null; theme: string | null; start_screen: string | null };
+  globals: { name: string; expr: string; line: number }[];
+  screens: { name: string; line: number; used_by: number }[];
+  functions: { name: string; params: number; line: number }[];
+  style: 'english' | 'tanglish';
 }
 
 export interface DesignTreeNode {

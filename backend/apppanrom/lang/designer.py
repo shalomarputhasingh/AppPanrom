@@ -14,6 +14,7 @@ from .compiler import compile_source
 from .lexer import tokenize
 from .parser import Parser, parse
 from .spec import load_spec
+from .tanglish import detect_style, to_tanglish
 
 INDENT = 4
 LINE_WIDTH = 100
@@ -342,6 +343,9 @@ def _errors(source: str) -> list:
     return [d for d in r.diagnostics if d.severity == "error"]
 
 
+CHECKED_KINDS = ("set_prop", "set_style", "set_styles", "set_event", "set_app", "add_global", "set_global", "delete_global", "rename_screen", "delete_screen")
+
+
 def apply_op(source: str, op: dict) -> dict:
     """Applies one designer operation. Returns {"source": new_source, "line": line_to_select | None}."""
     kind = op.get("kind")
@@ -354,16 +358,20 @@ def apply_op(source: str, op: dict) -> dict:
         "insert": _op_insert, "move": _op_move, "delete": _op_delete, "duplicate": _op_duplicate,
         "set_prop": _op_set_prop, "set_style": _op_set_style, "set_styles": _op_set_styles, "set_event": _op_set_event,
         "add_screen": _op_add_screen, "create_handler": _op_create_handler,
+        "set_app": _op_set_app, "add_global": _op_add_global, "set_global": _op_set_global, "delete_global": _op_delete_global,
+        "rename_screen": _op_rename_screen, "delete_screen": _op_delete_screen,
     }.get(kind)
     if fn is None:
         raise DesignError(f"Unknown operation '{kind}'.", "bad_op")
-    before = len(_errors(source)) if kind in ("set_prop", "set_style", "set_styles", "set_event") else 0
+    before = len(_errors(source)) if kind in CHECKED_KINDS else 0
     new_lines, select = fn(program, lines, source, op)
     new_source = _check(_join(new_lines))
-    if kind in ("set_prop", "set_style", "set_styles", "set_event"):
+    if kind in CHECKED_KINDS:
         after = _errors(new_source)
         if len(after) > before:
             raise DesignError(after[0].message + (f" {after[0].suggestion}" if after[0].suggestion else ""), "invalid_value")
+    if detect_style(source) == "tanglish":  # keep the file in the vocabulary the author chose
+        new_source = to_tanglish(new_source)
     return {"source": new_source, "line": select}
 
 
@@ -582,6 +590,168 @@ def _describe_value(node: dict) -> dict:
 
 def _key_text(k: dict) -> str:
     return k["v"] if k["t"] == "str" else unparse(k)
+
+
+# --------------------------------------------------------------------------------------------------------------
+# App-level edits (settings menu): app name/id/version/theme/start screen, global variables, screens.
+# --------------------------------------------------------------------------------------------------------------
+APP_KEYS = {"name": "app_uruvakku", "id": "app_id_set", "version": "app_version_set", "theme": "app_theme_set", "start_screen": "app_start_screen"}
+_NAME_RE = r"[A-Za-z_][A-Za-z0-9_]*"
+
+
+def _top(program, t, **match):
+    return [n for n in program if n["t"] == t and all(n.get(k) == v for k, v in match.items())]
+
+
+def _top_insert_index(program, prefer: tuple[str, ...]) -> int:
+    """0-based line to insert a new top-level setting/variable: after the last statement of the preferred kinds, else before the first real statement."""
+    last = None
+    for n in program:
+        if (n["t"] == "call_stmt" and "config" in prefer and n["f"] in APP_KEYS.values()) or (n["t"] == "let" and "let" in prefer):
+            last = n
+    if last is not None:
+        return last["end"]
+    first = program[0]["pos"][0] - 1 if program else 0
+    return first
+
+
+def _op_set_app(program, lines, source, op):
+    key, value = op.get("key"), op.get("value")
+    fn = APP_KEYS.get(key)
+    if fn is None:
+        raise DesignError(f"Unknown app setting '{key}'.", "bad_setting")
+    existing = [n for n in program if n["t"] == "call_stmt" and n["f"] == fn]
+    if value is None or value == "":
+        if key == "name":
+            raise DesignError("The app needs a name.", "bad_setting")
+        for n in existing:
+            del lines[n["pos"][0] - 1 : n["end"]]
+        return lines, 1
+    text = f"{fn}({unparse(literal_node(str(value)))})"
+    if existing:
+        n = existing[0]
+        lines[n["pos"][0] - 1 : n["end"]] = [text]
+        return lines, n["pos"][0]
+    idx = _top_insert_index(program, ("config",))
+    block = [text]
+    if not any(n["t"] == "call_stmt" and n["f"] in APP_KEYS.values() for n in program):
+        block.append("")  # first setting: separate it from the code below
+    lines[idx:idx] = block
+    return lines, idx + 1
+
+
+def _global_named(program, name):
+    found = _top(program, "let", n=name)
+    if not found:
+        raise DesignError(f"There is no global variable '{name}'.", "unknown_variable")
+    return found[0]
+
+
+def _op_add_global(program, lines, source, op):
+    name = str(op.get("name", ""))
+    if not re.fullmatch(_NAME_RE, name):
+        raise DesignError("Variable names use letters, digits and underscores, starting with a letter.", "bad_name")
+    if _top(program, "let", n=name):
+        raise DesignError(f"Global '{name}' already exists.", "duplicate")
+    expr = unparse(parse_expression(str(op.get("expr", "null")).strip() or "null"))
+    idx = _top_insert_index(program, ("let",)) if _top(program, "let") else _top_insert_index(program, ("config",))
+    block = [f"mari {name} = {expr}"]
+    if not _top(program, "let"):
+        block = [""] + block if program and idx > 0 else block + [""]
+    lines[idx:idx] = block
+    return lines, idx + len(block)
+
+
+def _op_set_global(program, lines, source, op):
+    n = _global_named(program, str(op.get("name", "")))
+    expr = unparse(parse_expression(str(op.get("expr", "")).strip() or "null"))
+    lines[n["pos"][0] - 1 : n["end"]] = [f"mari {n['n']} = {expr}"]
+    return lines, n["pos"][0]
+
+
+def _op_delete_global(program, lines, source, op):
+    n = _global_named(program, str(op.get("name", "")))
+    del lines[n["pos"][0] - 1 : n["end"]]
+    return lines, 1
+
+
+def _all_nodes(o):
+    if isinstance(o, dict):
+        yield o
+        for v in o.values():
+            yield from _all_nodes(v)
+    elif isinstance(o, list):
+        for v in o:
+            yield from _all_nodes(v)
+
+
+def _screen_refs(program, name):
+    """String-literal references to a screen name: screen_ku_poo("x") / app_start_screen("x")."""
+    return [a for n in _all_nodes(program) if n.get("t") in ("call_stmt", "call") and n.get("f") in ("screen_ku_poo", "app_start_screen")
+            for a in n.get("args", [])[:1] if a.get("t") == "str" and a.get("v") == name]
+
+
+def _screen_named(program, name):
+    for n in program:
+        if is_screen(n) and n["args"] and n["args"][0].get("v") == name:
+            return n
+    raise DesignError(f"There is no screen '{name}'.", "unknown_screen")
+
+
+def _op_rename_screen(program, lines, source, op):
+    old, new = str(op.get("name", "")), str(op.get("new_name", ""))
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,39}", new):
+        raise DesignError("Screen names use letters, digits and underscores (max 40), starting with a letter.", "bad_name")
+    node = _screen_named(program, old)
+    if old != new and any(is_screen(n) and n["args"] and n["args"][0].get("v") == new for n in program):
+        raise DesignError(f"Screen '{new}' already exists.", "duplicate")
+    refs = [node["args"][0]] + _screen_refs(program, old)
+    lit = unparse(literal_node(new))
+    for a in sorted(refs, key=lambda x: (x["pos"][0], x["pos"][1]), reverse=True):  # right-to-left so columns stay valid
+        ln, col = a["pos"][0] - 1, a["pos"][1] - 1
+        text = lines[ln]
+        q = text[col]
+        end = text.index(q, col + 1)
+        while text[end - 1] == "\\":
+            end = text.index(q, end + 1)
+        lines[ln] = text[:col] + lit + text[end + 1 :]
+    return lines, node["pos"][0]
+
+
+def _op_delete_screen(program, lines, source, op):
+    name = str(op.get("name", ""))
+    node = _screen_named(program, name)
+    if sum(1 for n in program if is_screen(n)) == 1:
+        raise DesignError("An app needs at least one screen.", "last_screen")
+    refs = _screen_refs(program, name)
+    if refs:
+        raise DesignError(f"Screen '{name}' is still used by screen_ku_poo/app_start_screen on line {refs[0]['pos'][0]}. Change that first.", "screen_in_use")
+    start = node["pos"][0] - 1
+    end = node["end"]
+    while end < len(lines) and not lines[end].strip():
+        end += 1  # swallow the blank lines after it
+    del lines[start:end]
+    return lines, 1
+
+
+def describe_app(source: str) -> dict:
+    """What the settings menu shows: values written in the code (None = not set there) plus globals and screens."""
+    try:
+        program = parse(source)
+    except SyntaxProblem as e:
+        raise DesignError(f"Fix the syntax error first (line {e.diagnostic.line}).", "syntax") from None
+    code = {}
+    for key, fn in APP_KEYS.items():
+        found = [n for n in program if n["t"] == "call_stmt" and n["f"] == fn and n["args"] and n["args"][0]["t"] == "str"]
+        code[key] = found[0]["args"][0]["v"] if found else None
+    return {
+        "code": code,
+        "globals": [{"name": n["n"], "expr": unparse(n["e"]), "line": n["pos"][0]} for n in program if n["t"] == "let"],
+        "screens": [{"name": n["args"][0]["v"], "line": n["pos"][0], "used_by": len(_screen_refs(program, n["args"][0]["v"]))}
+                    for n in program if is_screen(n) and n["args"] and n["args"][0]["t"] == "str"],
+        "functions": [{"name": n["n"], "params": len(n["params"]), "line": n["pos"][0]} for n in program if n["t"] == "function"],
+        "style": detect_style(source),
+    }
 
 
 def describe(source: str, line: int) -> dict:

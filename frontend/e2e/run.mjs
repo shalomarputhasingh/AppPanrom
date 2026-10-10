@@ -157,17 +157,103 @@ screen_uruvakku("two"):
     await page.getByTestId('editor').waitFor();
     await page.locator('.cm-content').getByText('screen_ku_poo("two")').waitFor();
   });
-  await step('settings validation', async () => {
+  await step('settings menu edits the code: app id/name, variables, screens, Tanglish conversion; bad values are refused', async () => {
+    const code = () => page.locator('.cm-content').innerText();
+    const waitCode = async (re, timeout = 8000) => {
+      const end = Date.now() + timeout;
+      let last = '';
+      while (Date.now() < end) { last = await code(); if (re.test(last)) return last; await page.waitForTimeout(100); }
+      throw new Error('code never matched ' + re + '\n--- code ---\n' + last);
+    };
     await page.getByRole('tab', { name: 'Settings' }).click();
-    await page.getByLabel('Application ID').fill('Not Valid');
-    await page.getByRole('button', { name: 'Save settings' }).click();
-    await page.getByText(/Invalid application id/).waitFor();
-    await page.getByLabel('Application ID').fill('com.e2e.app');
-    await page.getByRole('button', { name: 'Save settings' }).click();
-    await page.getByText('Settings saved.').waitFor();
+    const st = page.getByTestId('settings');
+    await st.getByLabel('Application ID', { exact: true }).waitFor();
+    await st.getByLabel('Application ID', { exact: true }).fill('Not Valid');
+    await st.getByLabel('Application ID', { exact: true }).press('Enter');
+    await st.getByRole('alert').waitFor();
+    if (/Not Valid/.test(await code())) throw new Error('invalid app id was written to the code');
+    await st.getByLabel('Application ID', { exact: true }).fill('com.e2e.app');
+    await st.getByLabel('Application ID', { exact: true }).press('Enter');
+    await waitCode(/app_id_set\("com\.e2e\.app"\)/);
+    await st.getByLabel('App name', { exact: true }).fill('E2E Name');
+    await st.getByLabel('App name', { exact: true }).press('Enter');
+    await waitCode(/app_uruvakku\("E2E Name"\)/);
+    await st.getByLabel('Version', { exact: true }).fill('3.1.4');
+    await st.getByLabel('Version', { exact: true }).press('Enter');
+    await waitCode(/app_version_set\("3\.1\.4"\)/);
+    // variables
+    await st.getByLabel('New variable name').fill('score');
+    await st.getByLabel('New variable value').fill('10');
+    await st.getByRole('button', { name: 'Add', exact: true }).click();
+    await waitCode(/mari score = 10/);
+    await st.getByLabel('Value of score').fill('"hi"');
+    await st.getByLabel('Value of score').press('Enter');
+    await waitCode(/mari score = "hi"/);
+    await st.getByLabel('Delete variable score').click();
+    await page.waitForFunction(() => !/mari score/.test(document.querySelector('.cm-content').innerText));
+    // screens
+    await st.getByLabel('New screen name').fill('extra');
+    await st.getByRole('button', { name: 'Add screen' }).click();
+    await waitCode(/screen_uruvakku\("extra"\)/);
+    await st.getByLabel('Screen name extra').fill('bonus');
+    await st.getByLabel('Screen name extra').press('Enter');
+    await waitCode(/screen_uruvakku\("bonus"\)/);
+    await st.getByLabel('Start screen').selectOption('bonus');
+    await waitCode(/app_start_screen\("bonus"\)/);
+    await st.getByLabel('Start screen').selectOption('home');
+    await st.getByLabel('Delete screen bonus').click();
+    await page.waitForFunction(() => !/"bonus"/.test(document.querySelector('.cm-content').innerText));
+    // Tanglish vocabulary round trip (the designer keeps the vocabulary; diagnostics get Tanglish hints)
+    await st.getByTestId('to-tanglish').click();
+    await waitCode(/seyal \w+\(\)/);
+    await st.getByText('Tanglish vocabulary').waitFor();
+    await shot(page, '09-settings-tanglish');
+    await st.getByTestId('to-english').click();
+    await waitCode(/function \w+\(\)/);
+    await st.getByText('English vocabulary').waitFor();
   });
-  await step('rename and delete (with confirmation) from the dashboard', async () => {
+  await step('hot reload: editing code updates the running preview in place (same iframe, state kept, only changes patched)', async () => {
     await page.getByRole('button', { name: 'Back to projects' }).click();
+    await page.getByLabel('New project name').fill('Hot App');
+    await page.locator('label.template', { hasText: 'Counter' }).click();
+    await page.getByRole('button', { name: 'Create project' }).click();
+    await page.getByTestId('editor').waitFor();
+    await page.getByTestId('run-btn').click();
+    const frameEl = page.getByTestId('preview-frame');
+    await frameEl.waitFor();
+    const frame = page.frameLocator('[data-testid=preview-frame]');
+    await frame.getByText('Count: 0').waitFor();
+    for (let i = 0; i < 3; i++) await frame.getByRole('button', { name: '+', exact: true }).click();
+    await frame.getByText('Count: 3').waitFor();
+    const handle = await frameEl.elementHandle();
+    const cf = await handle.contentFrame();
+    await cf.evaluate(() => { window.__marker = 'same-document'; window.__btn = document.querySelector('.ap-btn'); });
+    await page.getByRole('tab', { name: 'Settings' }).click();
+    const st = page.getByTestId('settings');
+    // 1. theme change through the GUI -> code changes -> running preview turns dark without reloading
+    await st.getByLabel('Theme', { exact: true }).selectOption('dark');
+    await page.waitForFunction(() => /app_theme_set\("dark"\)/.test(document.querySelector('.cm-content').innerText));
+    await cf.waitForFunction(() => document.querySelector('.ap-root').getAttribute('data-theme') === 'dark');
+    // 2. add a global; the app keeps its running state (count is still 3) and the very same DOM button survives
+    await st.getByLabel('New variable name').fill('bonus');
+    await st.getByRole('button', { name: 'Add', exact: true }).click();
+    await page.waitForFunction(() => /mari bonus = 0/.test(document.querySelector('.cm-content').innerText));
+    await page.getByTestId('live-badge').getByText('Live').waitFor();
+    await frame.getByText('Count: 3').waitFor();
+    const kept = await cf.evaluate(() => window.__marker === 'same-document' && window.__btn === document.querySelector('.ap-btn'));
+    if (!kept) throw new Error('the preview iframe/DOM was reloaded instead of hot-patched');
+    // 3. changing the starting value of a variable the app uses is visible immediately (new initial value wins)
+    await st.getByLabel('Value of count').fill('7');
+    await st.getByLabel('Value of count').press('Enter');
+    await frame.getByText('Count: 7').waitFor();
+    await shot(page, '10-hot-reload');
+    await page.getByRole('button', { name: 'Back to projects' }).click();
+    await page.getByRole('heading', { name: 'Hot App' }).waitFor();
+    await page.locator('li.card', { hasText: 'Hot App' }).getByRole('button', { name: 'Delete', exact: true }).click();
+    await page.getByRole('button', { name: 'Delete project' }).click();
+    await page.getByRole('heading', { name: 'Hot App' }).waitFor({ state: 'detached' });
+  });
+  await step('rename and delete (with confirmation) from the dashboard', async () => {  // (the hot-reload step already returned to the dashboard)
     await page.getByRole('button', { name: 'Rename' }).click();
     await page.getByLabel('Project name', { exact: true }).fill('Renamed App');
     await page.getByRole('button', { name: 'Save', exact: true }).click();

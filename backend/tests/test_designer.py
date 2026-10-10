@@ -289,3 +289,74 @@ def test_set_styles_rejects_bad_batches_without_partial_changes():
             apply_op(src, {"kind": "set_styles", "line": 3, "styles": styles})
     with pytest.raises(DesignError):  # 'gap' is a flow style; a title does not take it
         apply_op(src, {"kind": "set_styles", "line": 3, "styles": {"gap": {"literal": 4}}})
+
+
+# ------------------------------------------------------------------ settings menu: app-level edits
+APP_SRC = '# my app\napp_uruvakku("Old")\n\nmari count = 0\n\nfunction bump():\n    count = count + 1\n\nscreen_uruvakku("home"):\n    button("go", click_pannumbodhu=bump)\n    button("next", click_pannumbodhu=go_next)\n\nfunction go_next():\n    screen_ku_poo("second")\n\nscreen_uruvakku("second"):\n    text_kaattu("hi")\n'
+
+
+def test_set_app_settings_edit_or_insert_lines():
+    from apppanrom.lang.designer import describe_app
+    s = apply_op(APP_SRC, {"kind": "set_app", "key": "name", "value": "New Name"})["source"]
+    assert 'app_uruvakku("New Name")' in s and "Old" not in s
+    s = apply_op(s, {"kind": "set_app", "key": "id", "value": "com.me.app"})["source"]
+    s = apply_op(s, {"kind": "set_app", "key": "version", "value": "2.3.4"})["source"]
+    s = apply_op(s, {"kind": "set_app", "key": "theme", "value": "dark"})["source"]
+    s = apply_op(s, {"kind": "set_app", "key": "start_screen", "value": "second"})["source"]
+    d = describe_app(s)
+    assert d["code"] == {"name": "New Name", "id": "com.me.app", "version": "2.3.4", "theme": "dark", "start_screen": "second"}
+    assert s.startswith("# my app\n") and compile_source(s).ok
+    s2 = apply_op(s, {"kind": "set_app", "key": "theme", "value": None})["source"]
+    assert describe_app(s2)["code"]["theme"] is None
+    for bad in [{"key": "id", "value": "Not An Id"}, {"key": "version", "value": "x"}, {"key": "theme", "value": "pink"}, {"key": "start_screen", "value": "nope"}, {"key": "name", "value": ""}, {"key": "zzz", "value": "a"}]:
+        with pytest.raises(DesignError):
+            apply_op(APP_SRC, {"kind": "set_app", **bad})
+
+
+def test_globals_add_edit_delete():
+    from apppanrom.lang.designer import describe_app
+    s = apply_op(APP_SRC, {"kind": "add_global", "name": "total", "expr": "1 + 2"})["source"]
+    assert "mari total = 1 + 2" in s and [g["name"] for g in describe_app(s)["globals"]] == ["count", "total"]
+    s = apply_op(s, {"kind": "set_global", "name": "total", "expr": '"hello"'})["source"]
+    assert 'mari total = "hello"' in s
+    s = apply_op(s, {"kind": "delete_global", "name": "total"})["source"]
+    assert "total" not in s
+    with pytest.raises(DesignError):
+        apply_op(s, {"kind": "delete_global", "name": "count"})  # still used by bump()
+    with pytest.raises(DesignError):
+        apply_op(s, {"kind": "add_global", "name": "count", "expr": "1"})
+    with pytest.raises(DesignError):
+        apply_op(s, {"kind": "add_global", "name": "bad name", "expr": "1"})
+    with pytest.raises(DesignError):
+        apply_op(s, {"kind": "add_global", "name": "x", "expr": "1 +"})
+    # first global in a file without any
+    t = apply_op('screen_uruvakku("home"):\n    text_kaattu("a")\n', {"kind": "add_global", "name": "n", "expr": "5"})["source"]
+    assert t.startswith("mari n = 5") and compile_source(t).ok
+
+
+def test_rename_and_delete_screen_update_references():
+    s = apply_op(APP_SRC, {"kind": "rename_screen", "name": "second", "new_name": "settings"})["source"]
+    assert 'screen_uruvakku("settings")' in s and 'screen_ku_poo("settings")' in s and "second" not in s
+    assert compile_source(s).ok
+    with pytest.raises(DesignError):
+        apply_op(s, {"kind": "rename_screen", "name": "settings", "new_name": "home"})
+    with pytest.raises(DesignError):
+        apply_op(s, {"kind": "delete_screen", "name": "settings"})  # still navigated to
+    t = apply_op(s, {"kind": "set_app", "key": "start_screen", "value": "home"})["source"]
+    t = t.replace('    screen_ku_poo("settings")', "    summa")
+    t = apply_op(t, {"kind": "delete_screen", "name": "settings"})["source"]
+    assert "settings" not in t and compile_source(t).ok
+    with pytest.raises(DesignError):
+        apply_op(t, {"kind": "delete_screen", "name": "home"})  # last screen
+
+
+def test_design_app_endpoint_and_edit_roundtrip(client):
+    p = client.post("/api/projects", json={"name": "Settings App"}).json()
+    d = client.post(f"/api/projects/{p['id']}/design/app", json={}).json()
+    assert [s["name"] for s in d["screens"]] and "code" in d and d["style"] == "english"
+    src = client.get(f"/api/projects/{p['id']}/files/main.apn").json()["content"]
+    r = client.post(f"/api/projects/{p['id']}/design/edit", json={"source": src, "op": {"kind": "set_app", "key": "version", "value": "9.9.9"}})
+    assert r.status_code == 200 and 'app_version_set("9.9.9")' in r.json()["source"]
+    bad = client.post(f"/api/projects/{p['id']}/design/edit", json={"source": src, "op": {"kind": "set_app", "key": "version", "value": "banana"}})
+    assert bad.status_code == 422
+    assert client.post(f"/api/projects/{p['id']}/design/app", json={"source": "mari ="}).status_code == 422

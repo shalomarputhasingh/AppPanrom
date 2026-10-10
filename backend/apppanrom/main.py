@@ -21,8 +21,9 @@ from .android.prereqs import check_prerequisites, check_signing
 from .config import Settings
 from .db import Database
 from .lang import compile_source
-from .lang.designer import DesignError, apply_op, describe
+from .lang.designer import DesignError, apply_op, describe, describe_app
 from .lang.spec import REPO_ROOT, load_spec
+from .lang.tanglish import detect_style, to_english, to_tanglish
 from .projects import MAIN_FILE, Invalid, NotFound, ProjectStore
 
 
@@ -69,6 +70,11 @@ class DesignNode(BaseModel):
 
 class BuildRequest(BaseModel):
     kind: Literal["debug_apk", "release_apk", "release_aab"] = "debug_apk"
+
+
+class ConvertBody(BaseModel):
+    source: str = Field(max_length=200_000)
+    to: Literal["tanglish", "english"]
 
 
 class SourceBody(BaseModel):
@@ -145,6 +151,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/language/spec")
     def language_spec():
         return load_spec()
+
+    @app.post("/api/language/convert")
+    def language_convert(body: ConvertBody):
+        """Rewrites source between the English and the Tanglish vocabulary (same program, strings/comments untouched)."""
+        out = to_tanglish(body.source) if body.to == "tanglish" else to_english(body.source)
+        return {"source": out, "style": detect_style(out)}
 
     # ---- projects
     @app.get("/api/projects")
@@ -225,6 +237,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def design_edit(project_id: str, body: DesignEdit):
         store.get(project_id)
         return apply_op(body.source, body.op)
+
+    @app.post("/api/projects/{project_id}/design/app")
+    def design_app(project_id: str, body: SourceBody):
+        store.get(project_id)
+        return describe_app(body.source if body.source is not None else store.read_file(project_id, MAIN_FILE))
 
     @app.post("/api/projects/{project_id}/design/node")
     def design_node(project_id: str, body: DesignNode):

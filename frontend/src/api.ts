@@ -1,4 +1,4 @@
-import type { Build, BuildKind, CompileResult, DesignNodeInfo, Project, Spec, SystemStatus } from './types';
+import type { Build, BuildKind, CompileResult, DesignNodeInfo, Project, Spec, SystemStatus, AppInfo } from './types';
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string, public details?: unknown) {
@@ -47,6 +47,8 @@ export const api = {
     req<{ source: string; line: number | null }>('POST', `/api/projects/${id}/design/edit`, { source, op }),
   designNode: (id: string, source: string, line: number) =>
     req<DesignNodeInfo>('POST', `/api/projects/${id}/design/node`, { source, line }),
+  designApp: (id: string, source: string) => req<AppInfo>('POST', `/api/projects/${id}/design/app`, { source }),
+  convert: (source: string, to: 'tanglish' | 'english') => req<{ source: string; style: string }>('POST', '/api/language/convert', { source, to }),
   startBuild: (id: string, kind: BuildKind) => req<Build>('POST', `/api/projects/${id}/builds`, { kind }),
   iconUrl: (id: string) => `/api/projects/${id}/icon`,
   uploadIcon: async (id: string, file: File) => {

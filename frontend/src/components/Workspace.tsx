@@ -43,6 +43,8 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
   const [fileError, setFileError] = useState<string | null>(null);
   const [confirmExample, setConfirmExample] = useState<string | null>(null);
   const [showKeys, setShowKeys] = useState(false);
+  const [taMessages, setTaMessages] = useState<boolean>(() => { try { return window.localStorage.getItem('apppanrom.ta') === '1'; } catch { return false; } });
+  const setTa = useCallback((v: boolean) => { setTaMessages(v); try { window.localStorage.setItem('apppanrom.ta', v ? '1' : '0'); } catch { /* ignore */ } }, []);
   const [confirmDeleteFile, setConfirmDeleteFile] = useState<string | null>(null);
   // ---- designer state
   const [mode, setMode] = useState<Mode>('run');
@@ -124,7 +126,11 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
       if (seq !== valSeq.current) return;
       setDiags(r.diagnostics);
       setChecked(true);
-      if (r.ok && r.ir) { setDesignIr(r.ir); setSync('ok'); } else setSync('errors');
+      if (r.ok && r.ir) {
+        setDesignIr(r.ir); setSync('ok');
+        const fresh = r.ir;
+        setPreview((p) => (p.state === 'ready' ? { ...p, ir: fresh } : p)); // hot reload: the running preview follows the code
+      } else setSync('errors');
     }, () => undefined);
   }, [projectId]);
 
@@ -215,6 +221,24 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
       return m;
     }
   }, [projectId, validate]);
+
+  const getText = useCallback(() => text.current, []);
+  /** Rewrites the whole file between the English and the Tanglish vocabulary (one undoable replace). */
+  const convertCode = useCallback(async (to: 'tanglish' | 'english'): Promise<string | null> => {
+    try {
+      const r = await api.convert(text.current, to);
+      designEditing.current = true;
+      editor.current?.replaceAll(r.source);
+      designEditing.current = false;
+      window.clearTimeout(valTimer.current);
+      validate(r.source);
+      if (to === 'tanglish') setTa(true);
+      return null;
+    } catch (e) {
+      designEditing.current = false;
+      return (e as Error).message;
+    }
+  }, [validate, setTa]);
 
   const onCanvasDrop = useCallback((d: DropInfo) => {
     void applyDesignEdit(d.source === 'new'
@@ -405,7 +429,10 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
               </>
             )
           )}
-          {side === 'settings' && <SettingsPanel project={project} onSaved={(p) => { setProject(p); validate(text.current); }} />}
+          {side === 'settings' && (
+            <SettingsPanel project={project} onSaved={(p) => { setProject(p); validate(text.current); }} getText={getText} rev={designIr}
+              onOp={(op) => applyDesignEdit(op, true)} onConvert={convertCode} ready={sync === 'ok'} taMessages={taMessages} setTaMessages={setTa} />
+          )}
           {side === 'reference' && <ReferencePanel spec={spec} onUseExample={(c) => setConfirmExample(c)} />}
         </div>
       </aside>
@@ -422,7 +449,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
             <button role="tab" aria-selected={mode === 'design'} className={mode === 'design' ? 'on' : ''} onClick={() => void enterMode('design')} data-testid="mode-design">✎ Design</button>
           </div>
           {mode === 'run' ? (
-            <PhonePreview state={preview.state} ir={preview.ir} runKey={preview.runKey} projectId={projectId} errorCount={errorCount} onLog={log} onRestart={restart} />
+            <PhonePreview state={preview.state} ir={preview.ir} runKey={preview.runKey} projectId={projectId} errorCount={errorCount} codeOk={sync === 'ok'} onLog={log} onRestart={restart} />
           ) : (
             <div className="design-pane">
               <div className="design-toolbar">
@@ -478,7 +505,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
           <button role="tab" aria-selected={bottom === 'build'} className={bottom === 'build' ? 'on' : ''} onClick={() => setBottom('build')} data-testid="tab-build">Build</button>
         </div>
         {bottom === 'console' && <ConsolePanel lines={logs} onClear={() => setLogs([])} />}
-        {bottom === 'diagnostics' && <DiagnosticsPanel diagnostics={diags} checked={checked} onJump={(d) => editor.current?.jumpTo(d.line, d.col)} />}
+        {bottom === 'diagnostics' && <DiagnosticsPanel tanglish={taMessages} diagnostics={diags} checked={checked} onJump={(d) => editor.current?.jumpTo(d.line, d.col)} />}
         {bottom === 'inspector' && mode === 'design' && (
           <Inspector node={nodeInfo} spec={spec} disabled={sync !== 'ok'} onOp={inspectorOp} onDelete={deleteSelected} onDuplicate={duplicateSelected}
             onGoto={(l) => editor.current?.jumpTo(l, 1)} onCreateHandler={createHandler} />

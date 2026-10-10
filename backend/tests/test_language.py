@@ -238,3 +238,52 @@ def test_language_doc_mentions_every_spec_item():
     doc = (SAMPLE.parents[1] / "docs" / "language.md").read_text()
     missing = [n for group in ("functions", "components", "styles", "config_functions") for n in spec[group] if f"`{n}" not in doc]
     assert not missing, missing
+
+
+# ------------------------------------------------------------------ Tanglish vocabulary
+def test_tanglish_vocabulary_compiles_to_the_same_program():
+    import json
+    from apppanrom.lang.tanglish import detect_style, to_english, to_tanglish
+
+    def strip(o):
+        if isinstance(o, dict):
+            return {k: strip(v) for k, v in o.items() if k not in ("pos", "kw_pos")}
+        return [strip(x) for x in o] if isinstance(o, list) else o
+
+    for name in ("vanakkam", "counter", "notes", "calculator", "showcase"):
+        en = (SAMPLE.parents[1] / "examples" / f"{name}.apn").read_text()
+        ta = to_tanglish(en)
+        assert detect_style(en) == "english" and detect_style(ta) == "tanglish" and ta != en
+        assert to_english(ta) == en  # lossless round trip, comments and strings untouched
+        a, b = compile_source(en), compile_source(ta)
+        assert a.ok and b.ok
+        assert json.dumps(strip(a.ir), sort_keys=True) == json.dumps(strip(b.ir), sort_keys=True)
+
+
+def test_tanglish_conversion_never_touches_strings_or_comments():
+    from apppanrom.lang.tanglish import to_tanglish
+    src = 'mari s = "function return true"  # function in a comment\nfunction f():\n    return not true\n'
+    out = to_tanglish(src)
+    assert '"function return true"' in out and "# function in a comment" in out
+    assert "seyal f():" in out and "thirumbi_kudu illaadha sari" in out
+
+
+def test_tanglish_diagnostics_have_a_friendly_lead_in():
+    r = compile_source('screen_uruvakku("home"):\n    text_kaattu(naan)\n')
+    d = [x for x in r.diagnostics if x.code == "undefined_variable"][0]
+    assert d.ta and "variable" in d.ta
+    assert "ta" in d.to_dict()
+
+
+def test_convert_endpoint(client):
+    r = client.post("/api/language/convert", json={"source": "function f():\n    return true\n", "to": "tanglish"}).json()
+    assert r["source"] == "seyal f():\n    thirumbi_kudu sari\n" and r["style"] == "tanglish"
+    assert client.post("/api/language/convert", json={"source": r["source"], "to": "english"}).json()["source"] == "function f():\n    return true\n"
+
+
+def test_designer_keeps_a_tanglish_file_in_tanglish():
+    from apppanrom.lang.designer import apply_op
+    src = 'app_uruvakku("x")\nseyal go():\n    summa\nscreen_uruvakku("home"):\n    thalaippu("a")\n    batan("b", click_pannumbodhu=go)\n    thalaippu("c")\n'
+    out = apply_op(src, {"kind": "insert", "type": "button", "target_line": 5, "position": "after"})["source"]
+    assert "batan(" in out and "button(" not in out
+    assert compile_source(out).ok
