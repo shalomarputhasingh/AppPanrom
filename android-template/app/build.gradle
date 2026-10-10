@@ -35,6 +35,11 @@ android {
             signingConfig signingConfigs.release
         }
     }
+    // Lint is not part of the product here; skipping it keeps release builds from downloading the whole lint toolchain.
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17

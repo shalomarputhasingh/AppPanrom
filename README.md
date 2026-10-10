@@ -45,29 +45,35 @@ screen_uruvakku("home"):
 | Studio: projects (create/open/rename/delete), editor with highlighting + live diagnostics, console, live phone preview, settings, reference, examples | ✅ |
 | **Visual designer**: drag components from a palette onto the phone, select/move/duplicate/delete, outline tree, property inspector (properties, events, styles), new screens and handlers — every action edits `main.apn` and every code edit redraws the canvas | ✅ |
 | App icon (PNG upload), automatic Android permission declaration, `clipboard_copy`, `vibrate_pannu` | ✅ |
-| Release signing + release APK + AAB (keystore from environment, signature independently verified when tools are available) | ✅ implemented, **⚠ never run against a real Android SDK** (see below) |
+| Release signing + release APK + AAB (keystore from environment, signature independently verified when tools are available) | ✅ built and signature-verified for real (apksigner / jarsigner); install on a device not tested |
 | Persistence of projects/builds across restarts (SQLite + files) | ✅ |
-| Android build pipeline (generate project → Gradle → verify → download) | ✅ implemented, **⚠ not yet verified against a real Android SDK** (see below) |
+| Android build pipeline (generate project → Gradle → verify → download) | ✅ real `assembleDebug` / release APK / AAB succeeded with a real SDK; **⚠ never installed or launched on a device/emulator** (see below) |
 | Network APIs (`api_get`…), runtime-permission device capabilities (camera, location…), dialogs, gradients/shadows/custom fonts, extra themes, "fun mode" | ❌ not implemented (the compiler says so) |
 | Authentication / multi-user | ❌ local single-user MVP |
 
 ### Honest note on APK builds
 
-The pipeline (project generation, background Gradle run, log capture, timeout, artifact verification, history, download)
-is implemented and tested, but the development sandbox this was built in has **no Android SDK and cannot reach Google's
-Maven/SDK hosts**, so a real `assembleDebug` has **never been run** here. What *was* verified:
+Verified **for real** (Android SDK 34 / build-tools 34.0.0 from dl.google.com, JDK 21, Gradle 8.14.3, AGP 8.5.2, real Maven downloads):
 
-* prerequisite detection and the failure path with an actionable message (real run, no SDK);
-* the build manager with a **clearly labelled Gradle test double** (status transitions, log capture/cap, timeout kill,
-  corrupt/tiny/missing APK rejection, artifact pruning, download gating) — this proves the mechanics, **not** that the
-  Android template compiles;
-* the generated `index.html`/`app.js` bundle runs in Chromium under the same CSP the APK uses.
+* `cli android-project` → `gradle assembleDebug` exits 0; the APK has the expected manifest (package, label, minSdk 24, launcher
+  activity), `assets/www/apppanrom-runtime.js` byte-identical to `runtime/apppanrom-runtime.js`, and the debug signature verifies with `apksigner`.
+* The same through the Studio pipeline: API and the Studio **Build** tab (driven with Chromium) built debug APK, release APK and release AAB;
+  each artifact downloaded and verified. The uploaded icon is in the APK (`application: icon=…`).
+* `INTERNET` and `VIBRATE` are declared in the built APK exactly when `image_kaattu` / `vibrate_pannu` are used (checked with `aapt2 dump permissions`).
+* Release: a throwaway keystore from `make-keystore`; release APK verified by `apksigner verify`, AAB by `jarsigner -verify`; a release build without
+  the signing variables fails with `signing_not_configured` and produces no artifact.
+* `backend/tests/test_real_build.py` automates the above (runs only when `ANDROID_HOME` is set) and is the `android-build` job in
+  `.github/workflows/ci.yml`. That workflow file has **not been run on GitHub yet**; the commands in it were run by hand here.
 
-The Android template (`android-template/`: AGP 8.5.2, compileSdk/targetSdk 34, minSdk 24, `androidx.webkit` asset loader)
-was reviewed against known-good configurations but is **unproven until you run a build on a machine with the SDK**.
-A build is only ever reported as succeeded if Gradle exits 0 *and* a nonzero-size, valid APK zip containing
-`AndroidManifest.xml` and the runtime exists. Output is a **debug APK signed with the Android debug key** — not
-Play-Store ready; release signing and AAB are not implemented.
+**Not verified:** installing or launching the APK on a device or emulator (this environment has no KVM and no emulator, so the WebView
+behaviour on Android, the real launcher icon and the runtime permission behaviour are untested on hardware); Play Store acceptance of the AAB;
+release APKs have shortened resource paths (e.g. `res/o-.png` for the icon), which is normal AGP behaviour but was only inspected, not exercised.
+
+Practical notes from the real runs: the first build downloads ~hundreds of MB of dependencies and takes 2-4 minutes. Maven Central may answer
+HTTP 429 when the Gradle cache is cold (seen from this environment's shared egress); re-running continues from what was already downloaded, and the
+real-build test retries only on such download errors. The template disables Android lint for generated projects (`lint { checkReleaseBuilds false }`)
+so release builds do not fetch the lint toolchain. A build is only reported as succeeded if Gradle exits 0 *and* a valid artifact exists. Debug builds
+are signed with the Android debug key and are not Play-Store ready.
 
 ## Visual designer
 
@@ -151,7 +157,7 @@ Maven Central on first build.
   The secrets are passed only to the Gradle process environment. After the build the signature is checked independently
   (`apksigner` for APKs, `jarsigner` for bundles); an APK signed with the Android debug key is rejected as a release.
   If the verifier tool isn't installed the build is reported as *"not independently verified"*. **Back up your keystore**: you cannot update a published app without it.
-* Release builds use the same pipeline as debug builds and are subject to the same caveat below: not yet run against a real SDK.
+* Release builds use the same pipeline as debug builds (verified for real, see the note above).
 
 ## Tests
 
@@ -169,7 +175,7 @@ make e2e         # real backend + real Chromium: create project, edit, diagnosti
 | `backend/tests/test_designer.py` – drop/move/delete/duplicate/property/style/event edits incl. 150 randomised edits | no |
 | `runtime/test/` – interpreter, view tree, events, state, navigation, styles, storage, limits | no (calls the Python compiler) |
 | `frontend/e2e/run.mjs` – incl. drag-and-drop designer flow | no (Chromium required; uses `/opt/pw-browsers` or `CHROMIUM_PATH`) |
-| A real `assembleDebug` | **yes — not part of the automated suite yet** |
+| `backend/tests/test_real_build.py` – real debug APK, release APK, release AAB, permissions, icon, signature checks | **yes** (skipped unless `ANDROID_HOME` is set; ~4 min) |
 
 ## API (local, unauthenticated)
 
@@ -194,8 +200,8 @@ go through a server-side validated proxy.
 
 ## Known limitations / next steps
 
-* Run a real build on a machine with the Android SDK and fix whatever the template needs; add it as a CI job.
-* Network APIs, runtime-permission device capabilities, dialogs, more themes. Release signing/AAB/icon are implemented but unverified against a real SDK.
+* Install and launch the built APK on an emulator/device (not possible in the environment used so far); confirm the CI workflow runs on GitHub.
+* Network APIs, runtime-permission device capabilities, dialogs, more themes. 
 * Designer: no resize handles or free positioning (layout is flex-based, so you reorder/nest and set sizes in the inspector); selection is cleared when you type in the code (line numbers shift); edits to components that were generated by loops act on the one source line.
 * Text-input IME: redraws are deferred during composition; the whole screen is rebuilt on each event (fine for small apps).
 * Only `main.apn` is compiled; additional files are notes.
