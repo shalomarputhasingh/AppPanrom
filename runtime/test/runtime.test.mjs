@@ -363,3 +363,27 @@ test('handlers with arguments: each list item carries its own values, evaluated 
   assert.ok(flat(rt.render()).some((n) => n.props.text === 'x1;'));
   assert.deepEqual(logs.filter((l) => l.level === 'error'), []);
 });
+
+test('navbar and tab bar: views, switching screens without history, hidden bar', () => {
+  const src = 'app_uruvakku("T")\nmari n = 0\nfunction bump():\n    n = n + 1\nfunction hide():\n    screen_maathu("two")\n' +
+    'screen_uruvakku("one"):\n    navbar_uruvakku(title="Hello", subtitle="sub", align="center"):\n        nav_action("Add", icon="+", click_pannumbodhu=bump)\n    text_kaattu("n=" + str(n))\n' +
+    '    tabbar_uruvakku():\n        tab_item("One", icon="1", go="one")\n        tab_item("Two", icon="2", go="two")\n' +
+    'screen_uruvakku("two"):\n    navbar_uruvakku(visible=false)\n    text_kaattu("second")\n    tabbar_uruvakku():\n        tab_item("One", go="one")\n        tab_item("Two", go="two")\n';
+  const { rt, logs } = boot(src);
+  const kids = () => rt.render().children;
+  const nav = kids().find((k) => k.c === 'navbar_uruvakku');
+  assert.deepEqual([nav.props.title, nav.props.subtitle, nav.props.align, nav.props.back, nav.props.visible], ['Hello', 'sub', 'center', true, true]);
+  assert.equal(nav.children[0].props.icon, '+');
+  rt.fire(nav.children[0].events.click_pannumbodhu);
+  assert.ok(flat(rt.render()).some((n) => n.props.text === 'n=1'));
+  let tabs = kids().find((k) => k.c === 'tabbar_uruvakku').children;
+  assert.deepEqual(tabs.map((t) => t.props.active), [true, false]);   // active is automatic
+  assert.equal(rt.switchScreen('two'), true);                        // what a tab tap does: no history entry
+  assert.equal(rt.currentScreen(), 'two');
+  assert.equal(rt.canGoBack(), false);
+  tabs = kids().find((k) => k.c === 'tabbar_uruvakku').children;
+  assert.deepEqual(tabs.map((t) => t.props.active), [false, true]);
+  assert.equal(kids().find((k) => k.c === 'navbar_uruvakku').props.visible, false);
+  rt.fire('hide');                                                   // screen_maathu from code
+  assert.deepEqual(logs.filter((l) => l.level === 'error'), []);
+});

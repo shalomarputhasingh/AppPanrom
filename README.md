@@ -45,6 +45,8 @@ screen_uruvakku("home"):
 | **Hot reload**: edits appear in the running preview without reloading it; variables, inputs and current screen are kept, only changed components are patched | ✅ |
 | Handlers with arguments (`click_pannumbodhu=neekku_velai(i)`) and computed styles (`style=box(...)`) | ✅ |
 | **Flagship app** `examples/machan.apn` (Machan Planner): 6 screens, tasks, expenses, dialogues, game, storage, 5 looks + dark mode, animations, in Tanglish | ✅ tested (runtime + Chromium); APK built |
+| **Top bar & tabs**: `navbar_uruvakku` (title, subtitle, left/centre/right, back arrow, action buttons, any look; `visible=false` removes it) and `tabbar_uruvakku` + `tab_item` bottom tabs (`screen_maathu`, no back history); Settings → Top bar & tabs applies them to every screen | ✅ |
+| **Live preview of styles**: hover a look, colour, animation or bar look in the Inspector/Settings to see it on the canvas and in the running preview (code untouched), click to apply; ▶ Replay for animations | ✅ |
 | **Animations** (`animate`: fade/slide/zoom/pop/bounce/shake/pulse/float/spin, duration, delay), screen transitions, press feedback; respects reduce-motion | ✅ |
 | **Fast redraws**: the screen is patched in place (unchanged subtrees skipped), so typing keeps focus and animations don't restart | ✅ measured: 7.8 → 1.2 ms per keystroke on a 450-node screen (Chromium, script time only) |
 | Studio styling UX: one-click look presets, palettes, sliders, grouped Inspector, screen themes (gradients), project templates, light/dark toggle, shortcuts help | ✅ |
@@ -206,7 +208,7 @@ published app) and never commit them.
 | Release buttons are disabled | The three `APPANROM_KEYSTORE*` variables were not set when the server started |
 
 Development mode with hot reload (two terminals): `make dev-backend` (API on :8000) and `make dev-frontend` (Studio on :5173).
-Press **▶ Run** (or Ctrl+Enter) to compile and preview. Sample programs are in `examples/` and in the Studio's **Reference → Examples**. `examples/showcase.apn` demonstrates every look and animation, and `examples/machan.apn` is a complete Tanglish app (its icon is `machan-icon.png`). `examples/calculator.apn` + `examples/calculator-icon.png` is a full colourful calculator app (upload the PNG in Settings → App icon, then build).
+Press **▶ Run** (or Ctrl+Enter) to compile and preview. Sample programs are in `examples/` and in the Studio's **Reference → Examples**. `examples/showcase.apn` demonstrates every look and animation plus a custom top bar, a screen with no bar, and tabs, and `examples/machan.apn` is a complete Tanglish app (its icon is `machan-icon.png`). `examples/calculator.apn` + `examples/calculator-icon.png` is a full colourful calculator app (upload the PNG in Settings → App icon, then build).
 
 ### Configuration (environment variables)
 

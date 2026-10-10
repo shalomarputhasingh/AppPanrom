@@ -32,6 +32,15 @@ const GROUPS: { title: string; items: { type: string; label: string; glyph: stri
     ],
   },
   {
+    title: 'Navigation',
+    items: [
+      { type: 'navbar_uruvakku', label: 'Top bar', glyph: '▔' },
+      { type: 'nav_action', label: 'Bar action', glyph: '⊕' },
+      { type: 'tabbar_uruvakku', label: 'Tab bar', glyph: '▁' },
+      { type: 'tab_item', label: 'Tab', glyph: '▫' },
+    ],
+  },
+  {
     title: 'Display',
     items: [
       { type: 'image_kaattu', label: 'Image', glyph: '▨' },

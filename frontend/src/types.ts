@@ -92,6 +92,7 @@ export interface AppInfo {
   screens: { name: string; line: number; used_by: number }[];
   functions: { name: string; params: number; line: number }[];
   style: 'english' | 'tanglish';
+  bars: { navbar: string[]; tabbar: string[] };
 }
 
 export interface DesignTreeNode {

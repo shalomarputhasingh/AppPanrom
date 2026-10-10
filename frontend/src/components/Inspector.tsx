@@ -9,6 +9,9 @@ interface Props {
   spec: Spec | null;
   disabled: boolean;
   onOp: OnOp;
+  /** Hover preview of an edit on the canvas (null = stop previewing). */
+  onPreview(op: Record<string, unknown> | null): void;
+  onReplay(): void;
   onDelete(): void;
   onDuplicate(): void;
   onGoto(line: number): void;
@@ -111,14 +114,15 @@ function hex6(v: string): string {
 
 const SLIDER_MAX: Record<string, number> = { corner_radius: 100, padding: 80, margin: 80, gap: 80, border_width: 20, font_size: 96, opacity: 1, gradient_angle: 360, animate_duration: 5, animate_delay: 5 };
 
-function Swatches({ onPick, disabled, current }: { onPick(hex: string): void; disabled: boolean; current?: string }) {
+function Swatches({ onPick, onHover, disabled, current }: { onPick(hex: string): void; onHover(hex: string | null): void; disabled: boolean; current?: string }) {
   return (
     <div className="swatches" role="group" aria-label="Colour palette">
       {PALETTES.map((p) => (
         <div key={p.name} className="swatch-row" title={p.name}>
           {p.colors.map((c) => (
             <button key={c} type="button" className={`swatch ${current?.toLowerCase() === c.toLowerCase() ? 'on' : ''}`} style={{ background: c }}
-              aria-label={`${p.name} ${c}`} title={`${p.name} ${c}`} disabled={disabled} onClick={() => onPick(c)} />
+              aria-label={`${p.name} ${c}`} title={`${p.name} ${c}`} disabled={disabled} onClick={() => onPick(c)}
+              onMouseEnter={() => onHover(c)} onMouseLeave={() => onHover(null)} onFocus={() => onHover(c)} onBlur={() => onHover(null)} />
           ))}
         </div>
       ))}
@@ -126,8 +130,8 @@ function Swatches({ onPick, disabled, current }: { onPick(hex: string): void; di
   );
 }
 
-function StyleRow({ k, def, value, disabled, onOp, node }: {
-  k: string; def: Spec['styles'][string]; value?: DesignValue; disabled: boolean; onOp: OnOp; node: DesignNodeInfo;
+function StyleRow({ k, def, value, disabled, onOp, onPreview, node }: {
+  k: string; def: Spec['styles'][string]; value?: DesignValue; disabled: boolean; onOp: OnOp; onPreview(op: Record<string, unknown> | null): void; node: DesignNodeInfo;
 }) {
   const { error, run } = useOp(onOp);
   const set = (v: DesignInput) => run({ kind: 'set_style', line: node.line, key: k, value: v });
@@ -147,7 +151,8 @@ function StyleRow({ k, def, value, disabled, onOp, node }: {
           onCommit={(t) => set(t.trim() === '' ? null : { literal: t.trim() })} />
       </>
     );
-    extra = <Swatches disabled={disabled} current={lit === undefined ? undefined : String(lit)} onPick={(c) => set({ literal: c })} />;
+    extra = <Swatches disabled={disabled} current={lit === undefined ? undefined : String(lit)} onPick={(c) => set({ literal: c })}
+      onHover={(c) => onPreview(c ? { kind: 'set_style', line: node.line, key: k, value: { literal: c } } : null)} />;
   } else if (def.type === 'number') {
     const step = k === 'opacity' ? 0.05 : k === 'animate_duration' || k === 'animate_delay' ? 0.1 : 1;
     control = (
@@ -237,19 +242,26 @@ function EventRow({ ev, fn, node, disabled, onOp, onGoto, onCreateHandler }: {
 
 
 /** Style section: one-click looks, then grouped, collapsible controls. */
-function StylePanel({ node, spec, disabled, onOp }: { node: DesignNodeInfo; spec: Spec | null; disabled: boolean; onOp: OnOp }) {
+function StylePanel({ node, spec, disabled, onOp, onPreview, onReplay }: { node: DesignNodeInfo; spec: Spec | null; disabled: boolean; onOp: OnOp; onPreview(op: Record<string, unknown> | null): void; onReplay(): void }) {
   const { error, run } = useOp(onOp);
   if (node.style_dynamic) return <section><h4>Style</h4><p className="muted small">This style is computed in code; edit it in the editor.</p></section>;
   if (!spec) return null;
   const isScreen = node.kind === 'screen';
   const allowed = new Set(node.allowed.style);
-  const apply = (styles: StyleChange, fallbackBg?: string) => {
+  /** The set_styles operation for a look, limited to keys this component allows. */
+  const opFor = (styles: StyleChange, fallbackBg?: string): Record<string, unknown> | null => {
     const out: StyleChange = {};
     for (const [k, v] of Object.entries(styles)) if (allowed.has(k)) out[k] = v;
     // clay/outline look wrong without a colour: add a sensible one only if the component has none
     if (fallbackBg && allowed.has('background') && !node.style.background && !('background' in out)) out.background = { literal: fallbackBg };
-    if (Object.keys(out).length) void run({ kind: 'set_styles', line: node.line, styles: out });
+    return Object.keys(out).length ? { kind: 'set_styles', line: node.line, styles: out } : null;
   };
+  const apply = (styles: StyleChange, fallbackBg?: string) => { const op = opFor(styles, fallbackBg); if (op) void run(op); };
+  /** hover / keyboard focus shows the result on the canvas without changing the code */
+  const hover = (styles: StyleChange, fallbackBg?: string) => ({
+    onMouseEnter: () => onPreview(opFor(styles, fallbackBg)), onMouseLeave: () => onPreview(null),
+    onFocus: () => onPreview(opFor(styles, fallbackBg)), onBlur: () => onPreview(null),
+  });
   const clearAll = () => {
     const out: StyleChange = {};
     for (const k of Object.keys(node.style)) out[k] = null;
@@ -263,7 +275,7 @@ function StylePanel({ node, spec, disabled, onOp }: { node: DesignNodeInfo; spec
         <div className="presets" role="group" aria-label="Style presets">
           {PRESETS.map((p) => (
             <button key={p.id} type="button" className="preset" data-testid={`preset-${p.id}`} title={p.hint} disabled={disabled}
-              onClick={() => apply(p.styles, p.fallbackBackground)}>
+              onClick={() => apply(p.styles, p.fallbackBackground)} {...hover(p.styles, p.fallbackBackground)}>
               <span className={`preset-chip preset-${p.id}`} aria-hidden="true" />
               {p.name}
             </button>
@@ -273,7 +285,7 @@ function StylePanel({ node, spec, disabled, onOp }: { node: DesignNodeInfo; spec
         <div className="presets" role="group" aria-label="Screen themes">
           {SCREEN_THEMES.map((t) => (
             <button key={t.name} type="button" className="preset" disabled={disabled} title={`${t.name} screen`}
-              onClick={() => apply(t.styles)}>
+              onClick={() => apply(t.styles)} {...hover(t.styles)}>
               <span className="preset-chip" style={{ background: t.css }} aria-hidden="true" />
               {t.name}
             </button>
@@ -292,13 +304,16 @@ function StylePanel({ node, spec, disabled, onOp }: { node: DesignNodeInfo; spec
               <div className="chips" role="group" aria-label="Animations">
                 {ANIMATIONS.map((a) => (
                   <button key={a.id} type="button" className={`chip ${node.style.animate?.literal?.value === a.id ? 'on' : ''}`} disabled={disabled} data-testid={`anim-${a.id}`}
-                    onClick={() => void run({ kind: 'set_style', line: node.line, key: 'animate', value: { literal: a.id } })}>{a.name}</button>
+                    onClick={() => void run({ kind: 'set_style', line: node.line, key: 'animate', value: { literal: a.id } })}
+                    onMouseEnter={() => onPreview({ kind: 'set_style', line: node.line, key: 'animate', value: { literal: a.id } })} onMouseLeave={() => onPreview(null)}
+                    onFocus={() => onPreview({ kind: 'set_style', line: node.line, key: 'animate', value: { literal: a.id } })} onBlur={() => onPreview(null)}>{a.name}</button>
                 ))}
+                <button type="button" className="chip replay" disabled={disabled || !node.style.animate} onClick={onReplay} title="Play the animation again" data-testid="anim-replay">▶ Replay</button>
                 {node.style.animate && <button type="button" className="chip" disabled={disabled} onClick={() => void run({ kind: 'set_style', line: node.line, key: 'animate', value: null })}>None</button>}
               </div>
             )}
             {keys.map((k) => (
-              <StyleRow key={`${node.line}-${k}`} k={k} def={spec.styles[k]} value={node.style[k]} disabled={disabled} onOp={onOp} node={node} />
+              <StyleRow key={`${node.line}-${k}`} k={k} def={spec.styles[k]} value={node.style[k]} disabled={disabled} onOp={onOp} onPreview={onPreview} node={node} />
             ))}
           </details>
         );
@@ -308,7 +323,7 @@ function StylePanel({ node, spec, disabled, onOp }: { node: DesignNodeInfo; spec
   );
 }
 
-export function Inspector({ node, spec, disabled, onOp, onDelete, onDuplicate, onGoto, onCreateHandler }: Props) {
+export function Inspector({ node, spec, disabled, onOp, onPreview, onReplay, onDelete, onDuplicate, onGoto, onCreateHandler }: Props) {
   if (!node) {
     return (
       <div className="panel-body empty-insp">
@@ -348,7 +363,7 @@ export function Inspector({ node, spec, disabled, onOp, onDelete, onDuplicate, o
             ))}
           </section>
         )}
-        <StylePanel node={node} spec={spec} disabled={disabled} onOp={onOp} />
+        <StylePanel node={node} spec={spec} disabled={disabled} onOp={onOp} onPreview={onPreview} onReplay={onReplay} />
       </div>
     </div>
   );

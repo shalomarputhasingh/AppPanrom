@@ -305,8 +305,12 @@ def snippet(ctype: str, source: str, indent: int) -> list[str]:
         "progress_kaattu": "progress_kaattu(50)",
         "loading_kaattu": "loading_kaattu()",
         "divider_kaattu": "divider_kaattu()",
+        "nav_action": 'nav_action("Action", icon="+")',
+        "tab_item": 'tab_item("Tab", icon="•")',
     }
     blocks = {
+        "navbar_uruvakku": 'navbar_uruvakku(title="Title"):',
+        "tabbar_uruvakku": "tabbar_uruvakku():",
         "column_uruvakku": 'column_uruvakku(style={"gap": 8}):',
         "row_uruvakku": 'row_uruvakku(style={"gap": 8}):',
         "center_ama": "center_ama(style={\"gap\": 8}):",
@@ -314,6 +318,9 @@ def snippet(ctype: str, source: str, indent: int) -> list[str]:
     }
     if ctype in one:
         return [pad + one[ctype]]
+    if ctype == "tabbar_uruvakku":  # one tab per screen (up to four), already wired with go=
+        names = re.findall(r'^screen_uruvakku\("([A-Za-z0-9_]+)"', source, re.M)[:4] or ["home"]
+        return [pad + blocks[ctype]] + [pad + " " * INDENT + f'tab_item("{n.replace("_", " ").title()}", icon="•", go="{n}")' for n in names]
     return [pad + blocks[ctype], pad + " " * INDENT + "summa"]
 
 
@@ -343,7 +350,7 @@ def _errors(source: str) -> list:
     return [d for d in r.diagnostics if d.severity == "error"]
 
 
-CHECKED_KINDS = ("set_prop", "set_style", "set_styles", "set_event", "set_app", "add_global", "set_global", "delete_global", "rename_screen", "delete_screen")
+CHECKED_KINDS = ("set_prop", "set_style", "set_styles", "set_event", "set_app", "add_global", "set_global", "delete_global", "rename_screen", "delete_screen", "navbar_all", "tabs_all")
 
 
 def apply_op(source: str, op: dict) -> dict:
@@ -360,6 +367,7 @@ def apply_op(source: str, op: dict) -> dict:
         "add_screen": _op_add_screen, "create_handler": _op_create_handler,
         "set_app": _op_set_app, "add_global": _op_add_global, "set_global": _op_set_global, "delete_global": _op_delete_global,
         "rename_screen": _op_rename_screen, "delete_screen": _op_delete_screen,
+        "navbar_all": _op_navbar_all, "tabs_all": _op_tabs_all,
     }.get(kind)
     if fn is None:
         raise DesignError(f"Unknown operation '{kind}'.", "bad_op")
@@ -382,11 +390,44 @@ def _target(program, op) -> Loc | None:
     return _need_component(program, int(line), "target")
 
 
+BAR_PARENT = {"navbar_uruvakku": "screen", "tabbar_uruvakku": "screen", "nav_action": "navbar_uruvakku", "tab_item": "tabbar_uruvakku"}
+
+
+def _check_insert_place(ctype: str, program, target, screen, position: str) -> None:
+    """Top bar / tab bar pieces only fit in one place; refuse a drop that the compiler would reject."""
+    if position == "inside":
+        box = (target or screen).node
+    else:
+        box = target.parent if target is not None else None
+    parent = "screen" if box is None or is_screen(box) else box.get("f")
+    want = BAR_PARENT.get(ctype)
+    names = {"screen": "a screen", "navbar_uruvakku": "the top bar (navbar_uruvakku)", "tabbar_uruvakku": "the tab bar (tabbar_uruvakku)"}
+    if want and parent != want:
+        raise DesignError(f"{ctype} can only go {'directly in ' if want == 'screen' else 'inside '}{names[want]}.", "bad_target")
+    if not want and parent in ("navbar_uruvakku", "tabbar_uruvakku"):
+        raise DesignError(f"{names[parent].capitalize()} only holds {'nav_action' if parent == 'navbar_uruvakku' else 'tab_item'} items.", "bad_target")
+    if ctype in ("navbar_uruvakku", "tabbar_uruvakku"):
+        scr = (screen or (target.ancestors[0] if target and target.ancestors else None))
+        scr_node = scr.node if hasattr(scr, "node") else scr
+        if scr_node is not None and any(k.get("f") == ctype for k in scr_node.get("children", [])):
+            raise DesignError(f"This screen already has a {ctype}.", "duplicate")
+
+
 def _op_insert(program, lines, source, op):
     edits = Edits()
     screen = None if op.get("target_line") is not None else _first_screen(program, op.get("screen"))
     target = _target(program, op)
+    _check_insert_place(op.get("type", ""), program, target, screen, op.get("position", "inside"))
     idx, indent = _insertion_point(program, target, screen, op.get("position", "inside"), edits)
+    if op.get("type") == "navbar_uruvakku" and screen is not None:  # the top bar goes first (after screen_title)
+        kids = [k for k in screen.node["children"] if k["t"] != "summa"]
+        lead = [k for k in kids if k.get("f") == "screen_title"]
+        if kids and lead and lead[-1] is not kids[-1]:
+            idx = lead[-1]["end"]
+        elif kids and not lead:
+            idx = kids[0]["pos"][0] - 1
+        elif lead:
+            idx = lead[-1]["end"]
     new = snippet(op.get("type", ""), source, indent)
     edits.insert(idx, new)
     return edits.apply(lines), idx + edits.shift_before(idx) + 1
@@ -739,6 +780,96 @@ def _op_delete_screen(program, lines, source, op):
     return lines, 1
 
 
+# --------------------------------------------------------------------------------------------------------------
+# Top bar / tab bar for the whole app (settings menu)
+# --------------------------------------------------------------------------------------------------------------
+def _screen_names(program) -> list[str]:
+    return [n["args"][0]["v"] for n in program if is_screen(n) and n["args"] and n["args"][0]["t"] == "str"]
+
+
+def _bar_of(screen: dict, f: str):
+    return next((k for k in screen["children"] if k.get("f") == f), None)
+
+
+def _bare_navbar_index(screen: dict) -> tuple[int, int]:
+    """(0-based line, indent) for a new top bar: after screen_title, before everything else."""
+    kids = [k for k in screen["children"] if k["t"] != "summa"]
+    lead = [k for k in kids if k.get("f") == "screen_title"]
+    indent = _indent_of(kids[0]) if kids else _indent_of(screen) + INDENT
+    if lead:
+        return lead[-1]["end"], indent
+    return (kids[0]["pos"][0] - 1 if kids else screen["end"]), indent
+
+
+def _op_navbar_all(program, lines, source, op):
+    """Gives every screen (or `screens`) the same top bar settings. props/style are {key: {"literal": v} | null}; remove=true deletes the bars."""
+    props, style = op.get("props") or {}, op.get("style") or {}
+    only = op.get("screens")
+    cur = source
+    for name in _screen_names(program):
+        if only and name not in only:
+            continue
+        prog = parse(cur)
+        bar = _bar_of(_screen_named(prog, name), "navbar_uruvakku")
+        if op.get("remove"):
+            if bar:
+                cur = apply_op(cur, {"kind": "delete", "line": bar["pos"][0]})["source"]
+            continue
+        if bar is None:
+            if not any(v is not None for v in list(props.values()) + list(style.values())):
+                continue  # nothing to set and no bar to edit
+            scr = _screen_named(prog, name)
+            idx, indent = _bare_navbar_index(scr)
+            ls, _ = _split(cur)
+            only_summa = len([k for k in scr["children"] if k["t"] != "summa"]) == 0 and scr["children"]
+            if only_summa:  # a lone placeholder: replace it so the file stays tidy
+                k = scr["children"][0]
+                del ls[k["pos"][0] - 1 : k["end"]]
+                idx = k["pos"][0] - 1
+            ls[idx:idx] = [" " * indent + "navbar_uruvakku()"]
+            cur = _join(ls)
+            bar = _bar_of(_screen_named(parse(cur), name), "navbar_uruvakku")
+        line = bar["pos"][0]
+        for key, val in props.items():
+            cur = apply_op(cur, {"kind": "set_prop", "line": line, "name": key, "value": val})["source"]
+        if style:
+            cur = apply_op(cur, {"kind": "set_styles", "line": line, "styles": style})["source"]
+    return _split(cur)[0], 1
+
+
+def _op_tabs_all(program, lines, source, op):
+    """Replaces the bottom tab bar on the chosen screens (default: all) with `tabs` = [{label, icon, go}]. An empty list removes the tab bars."""
+    tabs = op.get("tabs")
+    if not isinstance(tabs, list) or len(tabs) > 5:
+        raise DesignError("'tabs' must be a list of up to 5 tabs.", "bad_value")
+    only = op.get("screens")
+    cur = source
+    for name in _screen_names(program):
+        if only and name not in only:
+            continue
+        old = _bar_of(_screen_named(parse(cur), name), "tabbar_uruvakku")
+        if old:
+            cur = apply_op(cur, {"kind": "delete", "line": old["pos"][0]})["source"]
+        if not tabs:
+            continue
+        prog = parse(cur)
+        scr = _screen_named(prog, name)
+        ls, _ = _split(cur)
+        edits = Edits()
+        idx, indent = _insertion_point(prog, None, Loc(scr, prog, None, []), "inside", edits)
+        block = [" " * indent + "tabbar_uruvakku():"]
+        for t in tabs:
+            args = [unparse(literal_node(str(t.get("label", "Tab"))))]
+            if t.get("icon"):
+                args.append("icon=" + unparse(literal_node(str(t["icon"]))))
+            if t.get("go"):
+                args.append("go=" + unparse(literal_node(str(t["go"]))))
+            block.append(" " * (indent + INDENT) + f"tab_item({', '.join(args)})")
+        edits.insert(idx, block)
+        cur = _join(edits.apply(ls))
+    return _split(cur)[0], 1
+
+
 def describe_app(source: str) -> dict:
     """What the settings menu shows: values written in the code (None = not set there) plus globals and screens."""
     try:
@@ -756,6 +887,10 @@ def describe_app(source: str) -> dict:
                     for n in program if is_screen(n) and n["args"] and n["args"][0]["t"] == "str"],
         "functions": [{"name": n["n"], "params": len(n["params"]), "line": n["pos"][0]} for n in program if n["t"] == "function"],
         "style": detect_style(source),
+        "bars": {
+            "navbar": [n["args"][0]["v"] for n in program if is_screen(n) and n["args"] and _bar_of(n, "navbar_uruvakku")],
+            "tabbar": [n["args"][0]["v"] for n in program if is_screen(n) and n["args"] and _bar_of(n, "tabbar_uruvakku")],
+        },
     }
 
 

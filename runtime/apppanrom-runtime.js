@@ -135,6 +135,7 @@
     'title', 'text_kaattu', 'button', 'input_uruvakku', 'password_input', 'number_input', 'checkbox_uruvakku',
     'toggle_uruvakku', 'dropdown_uruvakku', 'image_kaattu', 'list_kaattu', 'progress_kaattu', 'loading_kaattu',
     'divider_kaattu', 'card_uruvakku', 'column_uruvakku', 'row_uruvakku', 'center_ama',
+    'navbar_uruvakku', 'nav_action', 'tabbar_uruvakku', 'tab_item',
   ];
   function defaultInput(kind) {
     return kind === 'checkbox' || kind === 'toggle' ? false : kind === 'number' ? null : '';
@@ -441,6 +442,11 @@
       if (!ir.screens[a[0]]) throw new ApError("Screen '" + a[0] + "' does not exist.");
       stack.push(a[0]); return null;
     }, true);
+    def('screen_maathu', function (a) {
+      need('screen_maathu', 0, a[0], 'str');
+      if (!ir.screens[a[0]]) throw new ApError("Screen '" + a[0] + "' does not exist.");
+      stack[stack.length - 1] = a[0]; return null;   // switch without adding back history (tabs)
+    }, true);
     def('screen_back_poo', function () { if (stack.length > 1) stack.pop(); return null; }, true);
     def('screen_data_set', function (a) { screenData[need('screen_data_set', 0, a[0], 'str')] = a[1]; return null; }, true);
     def('screen_data_get', function (a) {
@@ -695,6 +701,16 @@
         if (typeof p.value !== 'number' || !isFinite(p.value)) throw new ApError('progress_kaattu value must be a number from 0 to 100.', pos);
         out.value = Math.max(0, Math.min(100, p.value)); text('label', '');
       } else if (c === 'loading_kaattu') text('label', '');
+      else if (c === 'navbar_uruvakku') {
+        text('title', ''); text('subtitle', ''); text('align', 'left'); bool('back', true); bool('visible', true);
+        if (['left', 'center', 'right'].indexOf(out.align) < 0) throw new ApError('navbar_uruvakku align must be "left", "center" or "right".', pos);
+      } else if (c === 'nav_action') { text('label', ''); text('icon', ''); }
+      else if (c === 'tab_item') {
+        text('label', ''); text('icon', ''); text('go', '');
+        if (out.go && !ir.screens[out.go]) throw new ApError("tab_item go: screen '" + out.go + "' does not exist.", pos);
+        if (p.active === undefined) out.active = out.go !== '' && out.go === stack[stack.length - 1];
+        else bool('active', false);
+      }
       return out;
     }
 
@@ -750,6 +766,10 @@
     rt.setInputFromUI = function (name, value) {
       try { inputs[name] = coerceInput(inputInfo[name].kind, value, 'input'); } catch (e) { log('warning', e.message); }
     };
+    rt.switchScreen = function (name) {
+      if (!ir.screens[name] || stack[stack.length - 1] === name) return false;
+      stack[stack.length - 1] = name; notify(); return true;
+    };
     rt.goBack = function () {
       if (stack.length > 1) { stack.pop(); notify(); return true; }
       return false;
@@ -783,8 +803,26 @@
     'position:absolute;inset:0;display:flex;flex-direction:column;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;box-sizing:border-box}',
     '.ap-root[data-theme=dark]{--bg:#0f172a;--fg:#f1f5f9;--surface:#1e293b;--border:#475569;--accent:#3b82f6;--muted:#94a3b8;--bar:#1e293b}',
     '.ap-root *{box-sizing:border-box}',
-    '.ap-bar{display:flex;align-items:center;gap:8px;padding:12px 16px;background:var(--bar);border-bottom:1px solid var(--border);font-weight:600;flex:none}',
-    '.ap-bar button{border:0;background:none;color:inherit;font-size:20px;line-height:1;padding:4px 8px;cursor:pointer;border-radius:6px}',
+    // no blue tap-highlight box on Android and no focus ring after a mouse/touch click; keyboard users still get a ring
+    '.ap-root,.ap-root *{-webkit-tap-highlight-color:transparent}',
+    '.ap-root button,.ap-root label,.ap-root select{touch-action:manipulation;-webkit-user-select:none;user-select:none}',
+    '.ap-root :focus{outline:none}',
+    '.ap-root :focus-visible{outline:2px solid var(--accent);outline-offset:2px}',
+    '.ap-root input:focus-visible,.ap-root select:focus-visible{outline:none}',
+    '.ap-root input:focus,.ap-root select:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}',
+    '.ap-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;min-height:52px;background:var(--bar);border-bottom:1px solid var(--border);box-shadow:0 1px 8px rgba(0,0,0,.07);flex:none;position:relative;z-index:2}',
+    '.ap-bar-title{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center}',
+    '.ap-bar-t{font-size:18px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.ap-bar-sub{font-size:12px;font-weight:400;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.ap-bar-center .ap-bar-title{text-align:center}.ap-bar-right .ap-bar-title{text-align:right}',
+    '.ap-bar-actions{display:flex;gap:4px;flex:none}',
+    '.ap-bar button{border:0;background:none;color:inherit;font:inherit;font-size:20px;line-height:1;min-width:36px;height:36px;padding:0 8px;cursor:pointer;border-radius:18px;transition:background .15s ease,transform .08s ease}',
+    '.ap-bar button:hover{background:rgba(127,127,127,.18)}.ap-bar button:active{transform:scale(.92)}',
+    '.ap-tabbar{display:flex;flex:none;background:var(--bar);border-top:1px solid var(--border);box-shadow:0 -1px 8px rgba(0,0,0,.06);padding:4px 4px calc(4px + env(safe-area-inset-bottom,0px))}',
+    '.ap-tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;border:0;background:none;color:inherit;opacity:.68;font:inherit;padding:6px 4px;border-radius:12px;cursor:pointer;transition:color .15s ease,background .15s ease,transform .08s ease}',
+    '.ap-tab:active{transform:scale(.94)}.ap-tab-ic{font-size:21px;line-height:1.1}.ap-tab-lb{font-size:11.5px;font-weight:600}',
+    '.ap-tab-on{opacity:1;background:color-mix(in srgb,currentColor 14%,transparent)}',
+    '.ap-tabbar:not(.ap-custom) .ap-tab-on{color:var(--accent)}',
     '.ap-screen{flex:1;min-height:0;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;color:var(--fg)}',
     '.ap-flow{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;min-width:0}',
     '.ap-row{flex-direction:row;align-items:center}',
@@ -1046,6 +1084,32 @@
     };
     rt = createRuntime(ir, realHost);
 
+    /** The top bar. `v` is a navbar_uruvakku view, or null for the default bar (screen title + back arrow). */
+    var barTitle = '';
+    function buildBar(v, shellOnly) {
+      var p = v ? v.props : { title: '', subtitle: '', align: 'left', back: true };
+      var node = el('div', 'ap-bar' + (p.align !== 'left' ? ' ap-bar-' + p.align : ''));
+      node.setAttribute('role', 'banner');
+      if (p.back && rt.canGoBack()) {
+        var back = el('button', '', '\u2190');
+        back.type = 'button';
+        back.setAttribute('aria-label', 'Back');
+        back.setAttribute('data-aps', 'back');
+        back.addEventListener('click', function () { rt.goBack(); });
+        node.appendChild(back);
+      }
+      var t = el('div', 'ap-bar-title');
+      t.appendChild(el('span', 'ap-bar-t', p.title || barTitle));
+      if (p.subtitle) t.appendChild(el('span', 'ap-bar-sub', p.subtitle));
+      node.appendChild(t);
+      if (v && v.children && v.children.length) {
+        var acts = el('div', 'ap-bar-actions');
+        if (!shellOnly) v.children.forEach(function (k) { acts.appendChild(buildView(k)); });
+        node.appendChild(acts);
+      }
+      return node;
+    }
+
     /** Content signature of a view subtree: equal signatures mean the DOM for it is already up to date. */
     function viewSig(v) {
       if (v.__sig) return v.__sig;
@@ -1089,7 +1153,30 @@
         node.appendChild(el('div', 'ap-spinner'));
         if (p.label) node.appendChild(el('div', '', p.label));
       } else if (c === 'divider_kaattu') { node = el('hr', 'ap-divider'); }
-      else {
+      else if (c === 'navbar_uruvakku') node = buildBar(v, shellOnly);
+      else if (c === 'nav_action') {
+        node = el('button', 'ap-nav-act', p.icon || p.label);
+        node.type = 'button';
+        node.setAttribute('aria-label', p.label || p.icon);
+        if (p.label) node.title = p.label;
+        var ha = v.events.click_pannumbodhu;
+        if (ha && !design) node.addEventListener('click', function () { rt.fire(ha); });
+        node.setAttribute('data-aps', 'na:' + evKey(ha) + (design ? ':d' : ''));
+      } else if (c === 'tabbar_uruvakku') {
+        node = el('div', 'ap-tabbar' + (s && s.text_color ? ' ap-custom' : ''));
+        node.setAttribute('role', 'tablist');
+        if (!shellOnly) (v.children || []).forEach(function (k) { node.appendChild(buildView(k)); });
+      } else if (c === 'tab_item') {
+        node = el('button', 'ap-tab' + (p.active ? ' ap-tab-on' : ''));
+        node.type = 'button';
+        node.setAttribute('role', 'tab');
+        node.setAttribute('aria-selected', p.active ? 'true' : 'false');
+        if (p.icon) node.appendChild(el('span', 'ap-tab-ic', p.icon));
+        node.appendChild(el('span', 'ap-tab-lb', p.label));
+        var ht = v.events.click_pannumbodhu, go = p.go;
+        if (!design && (go || ht)) node.addEventListener('click', function () { if (go) rt.switchScreen(go); if (ht) rt.fire(ht); });
+        node.setAttribute('data-aps', 'tab:' + go + ':' + evKey(ht) + (design ? ':d' : ''));
+      } else {
         node = el('div', 'ap-flow' + (c === 'row_uruvakku' ? ' ap-row' : '') + (c === 'center_ama' ? ' ap-center' : '') + (c === 'card_uruvakku' ? ' ap-card' : ''));
         if (!shellOnly) (v.children || []).forEach(function (k) { node.appendChild(buildView(k)); });
       }
@@ -1232,6 +1319,14 @@
       while (live.childNodes.length > i) live.removeChild(live.lastChild);
     }
 
+    /** Patches one optional slot (top bar / tab bar): update in place, remove, or insert before `before`. */
+    function patchSlot(oldN, newN, before) {
+      if (oldN && newN) { morphNode(oldN, newN); return oldN; }
+      if (oldN) { oldN.remove(); return null; }
+      if (newN) { app.insertBefore(newN, before); return newN; }
+      return null;
+    }
+
     function render() {
       var root = app.getRootNode ? app.getRootNode() : doc;
       var active = (root && root.activeElement) || doc.activeElement, restore = null;
@@ -1240,11 +1335,12 @@
         try { restore.s = active.selectionStart; restore.e = active.selectionEnd; } catch (e) { /* not selectable */ }
       }
       var prevScreen = app.getAttribute('data-screen');
-      var oldMain = null, oldBar = null;
+      var oldMain = null, oldBar = null, oldTab = null;
       Array.prototype.slice.call(app.children).forEach(function (c) {
         if (/ap-overlay|ap-toast|ap-drop-ind/.test(c.className)) return;
         if (c.classList.contains('ap-screen')) oldMain = c;
         else if (c.classList.contains('ap-bar')) oldBar = c;
+        else if (c.classList.contains('ap-tabbar')) oldTab = c;
         else c.remove(); // an earlier error box
       });
 
@@ -1254,6 +1350,7 @@
         realHost.log('error', rt.format(e));
         if (oldMain) oldMain.remove();
         if (oldBar) oldBar.remove();
+        if (oldTab) oldTab.remove();
         app.removeAttribute('data-screen');
         var errBox = el('div', 'ap-error', 'This screen has an error and cannot be drawn.\n\n' + rt.format(e));
         errBox.setAttribute('role', 'alert');
@@ -1261,35 +1358,41 @@
         app.insertBefore(el('div', 'ap-bar', ir.app.name), errBox);
         return;
       }
-      var bar = el('div', 'ap-bar');
-      if (rt.canGoBack()) {
-        var back = el('button', '', '\u2190');
-        back.type = 'button';
-        back.setAttribute('aria-label', 'Back');
-        back.setAttribute('data-aps', 'back');
-        back.addEventListener('click', function () { rt.goBack(); });
-        bar.appendChild(back);
-      }
-      bar.appendChild(el('span', '', view.title));
+      // the bars are views too: pull them out of the screen body and place them above / below it
+      var navView = null, tabView = null, bodyKids = [];
+      view.children.forEach(function (k) {
+        if (k.c === 'navbar_uruvakku' && !navView) navView = k;
+        else if (k.c === 'tabbar_uruvakku' && !tabView) tabView = k;
+        else bodyKids.push(k);
+      });
+      barTitle = view.title;
+      var bar = navView ? (navView.props.visible ? buildView(navView) : null) : buildBar(null);
+      var tabs = tabView ? buildView(tabView) : null;
       var main = el('div', 'ap-screen');
       main.setAttribute('role', 'main');
-      var samePatch = !!(oldMain && oldBar && prevScreen === view.screen);
-      if (!samePatch) view.children.forEach(function (k) { main.appendChild(buildView(k)); });
+      var samePatch = !!(oldMain && prevScreen === view.screen);
+      if (!samePatch) bodyKids.forEach(function (k) { main.appendChild(buildView(k)); });
       applyStyle(main, view.style);
+      // the screen's background (colour or gradient) also sits behind the bars, so glass / translucent bars have something to blur
+      if (main.style.background) { app.style.background = main.style.background; main.style.background = 'transparent'; }
+      else app.style.background = '';
       if (design) {
         main.setAttribute('data-ap-screen', view.screen);
-        if (!view.children.length) main.classList.add('ap-empty');
+        if (!bodyKids.length) main.classList.add('ap-empty');
       }
-      if (oldMain && oldBar && prevScreen === view.screen) {
+      if (samePatch) {
         syncAttrs(oldMain, main);   // same screen: patch in place (keeps focus, scroll, animations)
-        reconcileChildren(oldMain, view.children);
-        morphNode(oldBar, bar);
+        reconcileChildren(oldMain, bodyKids);
+        oldBar = patchSlot(oldBar, bar, oldMain);
+        patchSlot(oldTab, tabs, oldMain.nextSibling);
       } else {
         if (oldMain) oldMain.remove();
         if (oldBar) oldBar.remove();
+        if (oldTab) oldTab.remove();
         if (prevScreen !== null && prevScreen !== view.screen && !design) main.classList.add('ap-enter');
         app.insertBefore(main, app.firstChild);
-        app.insertBefore(bar, main);
+        if (bar) app.insertBefore(bar, main);
+        if (tabs) app.insertBefore(tabs, main.nextSibling);
       }
       app.setAttribute('data-screen', view.screen);
       if (design) {
@@ -1450,6 +1553,17 @@
         rt = next;
         rt.subscribe(render);
         render();
+        return true;
+      },
+      /** Design mode: play the entrance/attention animation of the component on `line` again. */
+      replay: function (line) {
+        var e = app.querySelector('[data-ap-line="' + line + '"]');
+        if (!e) return false;
+        var cls = Array.prototype.filter.call(e.classList, function (c) { return /^ap-a-/.test(c); })[0];
+        if (!cls) return false;
+        e.classList.remove(cls);
+        void e.offsetWidth;            // force a reflow so the animation restarts from the beginning
+        e.classList.add(cls);
         return true;
       },
       runtime: rt,

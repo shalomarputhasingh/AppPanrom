@@ -568,6 +568,78 @@
         "flow"
       ],
       "doc": "center_ama(style={}): <block> - centers children horizontally and vertically"
+    },
+    "navbar_uruvakku": {
+      "container": true,
+      "positional": [],
+      "kwargs": {
+        "title": "str",
+        "subtitle": "str",
+        "align": "str",
+        "back": "bool",
+        "visible": "bool"
+      },
+      "events": [],
+      "style_groups": [
+        "box",
+        "text"
+      ],
+      "doc": "navbar_uruvakku(title=\"\", subtitle=\"\", align=\"left\", back=true, visible=true, style={}) [: nav_action children] - the top bar of this screen (the block is optional; visible=false removes the bar; align is left, center or right)"
+    },
+    "nav_action": {
+      "container": false,
+      "positional": [
+        {
+          "name": "label",
+          "type": "str",
+          "required": true
+        }
+      ],
+      "kwargs": {
+        "icon": "str"
+      },
+      "events": [
+        "click_pannumbodhu"
+      ],
+      "style_groups": [
+        "box",
+        "text"
+      ],
+      "doc": "nav_action(label, icon=\"\", click_pannumbodhu=handler) - a button on the right of the top bar; only inside navbar_uruvakku (an icon replaces the label on the bar)"
+    },
+    "tabbar_uruvakku": {
+      "container": true,
+      "positional": [],
+      "kwargs": {},
+      "events": [],
+      "style_groups": [
+        "box",
+        "text"
+      ],
+      "doc": "tabbar_uruvakku(style={}): <tab_item children> - bottom tab bar of this screen"
+    },
+    "tab_item": {
+      "container": false,
+      "positional": [
+        {
+          "name": "label",
+          "type": "str",
+          "required": true
+        }
+      ],
+      "kwargs": {
+        "icon": "str",
+        "go": "str",
+        "active": "bool"
+      },
+      "events": [
+        "click_pannumbodhu"
+      ],
+      "style_groups": [
+        "box",
+        "text"
+      ],
+      "doc": "tab_item(label, icon=\"\", go=\"screen\", click_pannumbodhu=handler, active=...) - a tab; only inside tabbar_uruvakku. go switches to that screen (no back history); active is automatic when go is the current screen"
     }
   },
   "screen_functions": {
@@ -916,6 +988,14 @@
         "num"
       ],
       "doc": "vibrate_pannu(milliseconds) - vibrate the phone, 1-5000 ms (declares the VIBRATE permission; the preview only vibrates on devices that support it)"
+    },
+    "screen_maathu": {
+      "min": 1,
+      "max": 1,
+      "arg_types": [
+        "str"
+      ],
+      "doc": "screen_maathu(name) - switch to a screen without adding back history (tabs)"
     }
   },
   "not_implemented": [

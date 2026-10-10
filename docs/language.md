@@ -159,6 +159,10 @@ may not assign globals or call functions that change state (`message_kaattu`, `t
 | `column_uruvakku` | container (block) | `column_uruvakku(style={}): <block>` | - |
 | `row_uruvakku` | container (block) | `row_uruvakku(style={}): <block>` | - |
 | `center_ama` | container (block) | `center_ama(style={}): <block>` | - |
+| `navbar_uruvakku` | container (block optional) | `navbar_uruvakku(title="", subtitle="", align="left", back=true, visible=true, style={}): <nav_action items>` | - |
+| `nav_action` | leaf (only in a navbar) | `nav_action(label, icon="", click_pannumbodhu=handler, style={})` | click_pannumbodhu |
+| `tabbar_uruvakku` | container (block) | `tabbar_uruvakku(style={}): <tab_item items>` | - |
+| `tab_item` | leaf (only in a tabbar) | `tab_item(label, icon="", go="screen", click_pannumbodhu=handler, active=auto)` | click_pannumbodhu |
 
 * Required first arguments are positional; everything else is `name=value`. Unknown options are errors.
 * **Events** take the *name* of a zero-parameter function: `click_pannumbodhu=welcome` (no quotes, no parentheses), **or a call with arguments**:
@@ -174,6 +178,29 @@ may not assign globals or call functions that change state (`message_kaattu`, `t
   `INTERNET` permission only if the program uses `image_kaattu`.
 * Accessibility: inputs render a real `<label>`, images take `alt`, buttons use their label, toggles use `role="switch"`,
   progress and loading expose ARIA roles, and messages use `role="alertdialog"`.
+
+### Top bar and tabs (navbar)
+
+Every screen has a top bar. By default it shows the screen title (`screen_title`, else the app name) with an automatic back arrow. Add a `navbar_uruvakku`
+**directly inside a screen** (one per screen) to take control, and `tabbar_uruvakku` for a bottom tab bar (one per screen, anywhere in the screen block):
+
+```
+screen_uruvakku("home"):
+    navbar_uruvakku(title="Machan", subtitle="Welcome back", align="center", style={"background": "#4F46E5", "text_color": "#FFFFFF"}):
+        nav_action("Settings", icon="⚙", click_pannumbodhu=open_settings)
+    ...
+    tabbar_uruvakku():
+        tab_item("Home", icon="🏠", go="home")
+        tab_item("Tasks", icon="✅", go="tasks")
+```
+
+* `title` (default: the screen title), `subtitle`, `align` (`left` / `center` / `right`), `back=false` hides the back arrow, **`visible=false` removes the bar completely**.
+  The bar takes any `style` (colours, `glass`, `clay`, `brutal`, gradients, `animate`, padding, height...). `nav_action` buttons sit on the right; an `icon` (any text/emoji) replaces the label.
+* `tab_item` with `go="screen"` switches to that screen **without adding back history** (it uses `screen_maathu`); the tab is highlighted automatically when its
+  screen is the current one. A tab can also have `click_pannumbodhu=handler` (or both). Use the same `tabbar_uruvakku` block on every screen that should show the tabs.
+* `screen_maathu(name)` switches the current screen in code, with no back history (the opposite of `screen_ku_poo`, which pushes a screen you can come back from).
+* The Studio's **Settings → Top bar & tabs** writes these into every screen for you. A screen's background colour or gradient also shows behind the bars, so a `glass` bar blurs it.
+* No blue tap box: the runtime turns off the browser's tap highlight and shows a focus ring only for keyboard users.
 
 ### Navigation
 
@@ -305,6 +332,7 @@ Aliases are intentionally avoided: there is one name per operation.
 | `data_clear_pannu()` | remove all of this app's persisted data |
 | `screen_ku_poo(name)` | navigate to a screen |
 | `screen_back_poo()` | go back (no-op on the first screen) |
+| `screen_maathu(name)` | switch to a screen without adding back history (tabs) |
 | `screen_data_set(key, value)` | shared in-memory data for screen-to-screen passing |
 | `clipboard_copy(text)` | copy text to the clipboard (needs a user tap; no Android permission required). In the preview it needs a browser that allows it, otherwise a console warning is logged |
 | `vibrate_pannu(milliseconds)` | vibrate the phone, 1-5000 ms. Declares the `VIBRATE` permission. The preview only vibrates on devices that support it (otherwise a warning is logged) |

@@ -360,3 +360,53 @@ def test_design_app_endpoint_and_edit_roundtrip(client):
     bad = client.post(f"/api/projects/{p['id']}/design/edit", json={"source": src, "op": {"kind": "set_app", "key": "version", "value": "banana"}})
     assert bad.status_code == 422
     assert client.post(f"/api/projects/{p['id']}/design/app", json={"source": "mari ="}).status_code == 422
+
+
+# ------------------------------------------------------------------ top bar / tab bar
+BARS_SRC = 'app_uruvakku("x")\nscreen_uruvakku("home"):\n    screen_title("Home")\n    text_kaattu("hi")\nscreen_uruvakku("other"):\n    summa\n'
+
+
+def test_navbar_all_creates_updates_hides_and_removes():
+    from apppanrom.lang.designer import describe_app
+    s = apply_op(BARS_SRC, {"kind": "navbar_all", "props": {"align": {"literal": "center"}}, "style": {"background": {"literal": "#4F46E5"}, "glass": {"literal": True}}})["source"]
+    assert s.count("navbar_uruvakku(") == 2 and compile_source(s).ok
+    assert s.index("screen_title") < s.index("navbar_uruvakku") < s.index("text_kaattu")   # after the title, before the content
+    assert describe_app(s)["bars"]["navbar"] == ["home", "other"]
+    s = apply_op(s, {"kind": "navbar_all", "props": {"visible": {"literal": False}}})["source"]
+    assert s.count("visible=false") == 2
+    s = apply_op(s, {"kind": "navbar_all", "props": {"visible": None, "align": None}, "style": {"glass": None}})["source"]
+    assert "visible" not in s and "align" not in s and "glass" not in s and "#4F46E5" in s
+    assert apply_op(BARS_SRC, {"kind": "navbar_all", "props": {"back": None}})["source"] == BARS_SRC       # nothing to set: nothing created
+    s = apply_op(s, {"kind": "navbar_all", "remove": True})["source"]
+    assert "navbar_uruvakku" not in s and compile_source(s).ok
+    with pytest.raises(DesignError):
+        apply_op(BARS_SRC, {"kind": "navbar_all", "props": {"align": {"literal": "middle"}}})
+    only = apply_op(BARS_SRC, {"kind": "navbar_all", "screens": ["other"], "props": {"subtitle": {"literal": "s"}}})["source"]
+    assert only.count("navbar_uruvakku") == 1 and "summa" not in only.split('screen_uruvakku("other")')[1]
+
+
+def test_tabs_all_replaces_and_removes():
+    from apppanrom.lang.designer import describe_app
+    tabs = [{"label": "Home", "icon": "H", "go": "home"}, {"label": "Other", "icon": "O", "go": "other"}]
+    s = apply_op(BARS_SRC, {"kind": "tabs_all", "tabs": tabs})["source"]
+    assert s.count("tabbar_uruvakku") == 2 and s.count("tab_item(") == 4 and compile_source(s).ok
+    s = apply_op(s, {"kind": "tabs_all", "tabs": [{"label": "Only", "go": "home"}]})["source"]
+    assert s.count("tabbar_uruvakku") == 2 and s.count("tab_item(") == 2          # replaced, not duplicated
+    s = apply_op(s, {"kind": "tabs_all", "tabs": []})["source"]
+    assert "tabbar" not in s and describe_app(s)["bars"]["tabbar"] == []
+    with pytest.raises(DesignError):
+        apply_op(BARS_SRC, {"kind": "tabs_all", "tabs": [{"label": "X", "go": "nope"}]})   # unknown screen
+    with pytest.raises(DesignError):
+        apply_op(BARS_SRC, {"kind": "tabs_all", "tabs": [{"label": str(i)} for i in range(6)]})
+
+
+def test_bar_pieces_only_go_where_they_fit():
+    s = apply_op(BARS_SRC, {"kind": "insert", "type": "navbar_uruvakku", "screen": "home"})["source"]
+    s = apply_op(s, {"kind": "insert", "type": "tabbar_uruvakku", "screen": "home"})["source"]
+    assert "tab_item(" in s and compile_source(s).ok
+    for op in [{"type": "navbar_uruvakku", "screen": "home"}, {"type": "tabbar_uruvakku", "screen": "home"}, {"type": "nav_action", "screen": "home"},
+               {"type": "tab_item", "screen": "home"}, {"type": "text_kaattu", "target_line": 4, "position": "inside"}]:
+        with pytest.raises(DesignError):
+            apply_op(s, {"kind": "insert", **op})
+    ok = apply_op(s, {"kind": "insert", "type": "nav_action", "target_line": 4, "position": "inside"})["source"]
+    assert 'nav_action("Action"' in ok and compile_source(ok).ok

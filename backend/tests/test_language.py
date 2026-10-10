@@ -313,3 +313,21 @@ def test_flagship_machan_app_is_tanglish_and_equivalent_in_english():
     assert a.ok and b.ok and not a.diagnostics
     assert json.dumps(strip(a.ir), sort_keys=True) == json.dumps(strip(b.ir), sort_keys=True)
     assert sorted(a.ir["permissions"]) == sorted(["VIBRATE"]) or a.ir["permissions"]
+
+
+def test_navbar_and_tabbar_rules():
+    ok = ('app_uruvakku("t")\nfunction go():\n    screen_maathu("two")\nscreen_uruvakku("one"):\n'
+          '    navbar_uruvakku(title="Hi", subtitle="s", align="center", back=false, style={"background": "#4F46E5"}):\n        nav_action("Go", icon="+", click_pannumbodhu=go)\n'
+          '    text_kaattu("x")\n    tabbar_uruvakku():\n        tab_item("One", icon="1", go="one")\n        tab_item("Two", go="two")\nscreen_uruvakku("two"):\n    navbar_uruvakku(visible=false)\n    text_kaattu("y")\n')
+    assert compile_source(ok).ok
+    cases = {
+        "nav_action outside a navbar": ok.replace('    text_kaattu("x")', '    nav_action("x")'),
+        "navbar nested in a column": ok.replace('    text_kaattu("x")', '    column_uruvakku():\n        navbar_uruvakku()'),
+        "second navbar": ok.replace('    text_kaattu("x")', '    navbar_uruvakku():\n        summa'),
+        "bad align": ok.replace('align="center"', 'align="middle"'),
+        "unknown tab target": ok.replace('go="two")', 'go="nope")'),
+        "non-action in navbar": ok.replace('        nav_action("Go", icon="+", click_pannumbodhu=go)', '        text_kaattu("no")'),
+        "unknown screen_maathu target": ok.replace('screen_maathu("two")', 'screen_maathu("zzz")'),
+    }
+    for what, src in cases.items():
+        assert not compile_source(src).ok, what

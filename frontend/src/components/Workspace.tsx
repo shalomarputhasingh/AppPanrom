@@ -260,7 +260,31 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
     if (selected != null && nodeInfo?.kind === 'component') void applyDesignEdit({ kind: 'duplicate', line: selected });
   }, [applyDesignEdit, selected, nodeInfo]);
 
-  const inspectorOp = useCallback((op: Record<string, unknown>) => applyDesignEdit({ ...op }, true), [applyDesignEdit]);
+  /** Hover preview: show what an edit would look like on the canvas, without changing the code. null restores the real design. */
+  const previewTimer = useRef<number>();
+  const previewSeq = useRef(0);
+  const irRef = useRef<unknown>(null);
+  irRef.current = designIr;
+  const previewOp = useCallback((op: Record<string, unknown> | null) => {
+    window.clearTimeout(previewTimer.current);
+    const seq = ++previewSeq.current;
+    // shown on the design canvas (if open) and pushed into the live preview (hot reload) alike
+    const show = (ir: unknown) => { canvas.current?.preview(ir); setPreview((p) => (p.state === 'ready' ? { ...p, ir } : p)); };
+    if (!op) {
+      previewTimer.current = window.setTimeout(() => { if (seq === previewSeq.current && irRef.current) show(irRef.current); }, 80);
+      return;
+    }
+    if (syncRef.current !== 'ok') return;
+    previewTimer.current = window.setTimeout(async () => {
+      try {
+        const a = await api.designEdit(projectId, text.current, op);
+        const r = await api.preview(projectId, a.source);
+        if (seq === previewSeq.current && r.ir) show(r.ir);
+      } catch { /* a preview that cannot be built is simply not shown */ }
+    }, 120);
+  }, [projectId]);
+  const inspectorOp = useCallback((op: Record<string, unknown>) => { previewSeq.current++; window.clearTimeout(previewTimer.current); return applyDesignEdit({ ...op }, true); }, [applyDesignEdit]);
+  const replayAnimation = useCallback(() => { if (selected != null) canvas.current?.replay(selected); }, [selected]);
   /** Creates `function name():` in the code and wires the selected component's event to it, as one visible edit. */
   const createHandler = useCallback(async (name: string, event: string): Promise<string | null> => {
     if (syncRef.current !== 'ok' || selected == null) return 'Fix the errors in your code first.';
@@ -431,7 +455,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
           )}
           {side === 'settings' && (
             <SettingsPanel project={project} onSaved={(p) => { setProject(p); validate(text.current); }} getText={getText} rev={designIr}
-              onOp={(op) => applyDesignEdit(op, true)} onConvert={convertCode} ready={sync === 'ok'} taMessages={taMessages} setTaMessages={setTa} />
+              onOp={(op) => { previewSeq.current++; window.clearTimeout(previewTimer.current); return applyDesignEdit(op, true); }} onPreview={previewOp} onConvert={convertCode} ready={sync === 'ok'} taMessages={taMessages} setTaMessages={setTa} />
           )}
           {side === 'reference' && <ReferencePanel spec={spec} onUseExample={(c) => setConfirmExample(c)} />}
         </div>
@@ -507,7 +531,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
         {bottom === 'console' && <ConsolePanel lines={logs} onClear={() => setLogs([])} />}
         {bottom === 'diagnostics' && <DiagnosticsPanel tanglish={taMessages} diagnostics={diags} checked={checked} onJump={(d) => editor.current?.jumpTo(d.line, d.col)} />}
         {bottom === 'inspector' && mode === 'design' && (
-          <Inspector node={nodeInfo} spec={spec} disabled={sync !== 'ok'} onOp={inspectorOp} onDelete={deleteSelected} onDuplicate={duplicateSelected}
+          <Inspector node={nodeInfo} spec={spec} disabled={sync !== 'ok'} onOp={inspectorOp} onPreview={previewOp} onReplay={replayAnimation} onDelete={deleteSelected} onDuplicate={duplicateSelected}
             onGoto={(l) => editor.current?.jumpTo(l, 1)} onCreateHandler={createHandler} />
         )}
         {bottom === 'build' && <BuildPanel projectId={projectId} ensureSaved={doSave} onProblems={(d) => { setDiags(d); setChecked(true); }}

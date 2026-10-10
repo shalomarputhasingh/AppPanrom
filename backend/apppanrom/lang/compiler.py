@@ -53,6 +53,9 @@ def literal_type(node: dict) -> str | None:
 
 
 class Compiler:
+    _stack: list = []
+    _bars_seen: set = set()
+
     def __init__(self, defaults: dict | None):
         self.spec = load_spec()
         self.defaults = defaults or {}
@@ -143,6 +146,7 @@ class Compiler:
             ir_functions[name] = {"params": fn["params"], "body": body, "pos": fn["pos"]}
         for name, sc in self.screens.items():
             style = self._screen_style(sc)
+            self._stack, self._bars_seen = [], set()
             body = self._body(sc["children"], set(), "screen")
             ir_screens[name] = {"style": style, "body": body, "pos": sc["pos"]}
 
@@ -312,12 +316,30 @@ class Compiler:
         return node
 
     # ---- components -----------------------------------------------------------------
+    # bars: where each may appear (the parent component, or "screen" for the screen block itself)
+    BAR_PARENT = {"navbar_uruvakku": "screen", "tabbar_uruvakku": "screen", "nav_action": "navbar_uruvakku", "tab_item": "tabbar_uruvakku"}
+    BAR_CHILD = {"navbar_uruvakku": "nav_action", "tabbar_uruvakku": "tab_item"}
+
+    def _check_bar_placement(self, st: dict, name: str) -> None:
+        parent = self._stack[-1] if self._stack else "screen"
+        want = self.BAR_PARENT.get(name)
+        if want and parent != want:
+            where = "directly inside a screen" if want == "screen" else f"inside {want}"
+            self.error(st, f"{name} can only be used {where}.", "component_placement")
+        elif not want and parent in self.BAR_CHILD:
+            self.error(st, f"{parent} can only contain {self.BAR_CHILD[parent]} items.", "component_placement")
+        if name in ("navbar_uruvakku", "tabbar_uruvakku"):
+            if name in self._bars_seen:
+                self.error(st, f"A screen can have only one {name}.", "duplicate_bar")
+            self._bars_seen.add(name)
+
     def _component(self, st: dict, scope: set[str], spec: dict) -> dict:
         name = st["f"]
         self._note_use(name)
+        self._check_bar_placement(st, name)
         if st["t"] == "block_call" and not spec["container"]:
             self.error(st, f"'{name}' cannot contain other components.", "no_block")
-        if st["t"] == "call_stmt" and spec["container"]:
+        if st["t"] == "call_stmt" and spec["container"] and name != "navbar_uruvakku":  # a navbar may be written without actions
             self.error(st, f"'{name}' needs an indented block of children after ':'.", "needs_block",
                        f"Write: {name}(...):  then indent the children.")
         pos_spec = spec["positional"]
@@ -350,7 +372,18 @@ class Compiler:
                 self.input_names.add(node["v"])
             else:
                 self.error(node, f"{name} needs a fixed text name (a quoted string).", "bad_input_name")
-        children = self._body(st.get("children") or [], scope, "screen") if spec["container"] else None
+        if name == "navbar_uruvakku" and "align" in st["kw"] and st["kw"]["align"]["t"] == "str" and st["kw"]["align"]["v"] not in ("left", "center", "right"):
+            self.error(st["kw"]["align"], "align must be \"left\", \"center\" or \"right\".", "bad_option")
+        if name == "tab_item" and "go" in st["kw"] and st["kw"]["go"]["t"] == "str":
+            self.nav_targets.append((st["kw"]["go"]["v"], st["kw"]["go"]["pos"]))
+        if spec["container"]:
+            self._stack.append(name)
+            try:
+                children = self._body(st.get("children") or [], scope, "screen")
+            finally:
+                self._stack.pop()
+        else:
+            children = None
         out = {"t": "comp", "c": name, "props": props, "events": events, "style": style, "pos": st["pos"]}
         if children is not None:
             out["children"] = children
@@ -507,7 +540,7 @@ class Compiler:
                 lt = literal_type(a)
                 if lt and want != "any" and lt != want:
                     self.error(a, f"{name} argument {i + 1} must be {self._tname(want)}, not {self._tname(lt)}.", "type_mismatch")
-            if name == "screen_ku_poo" and args and args[0]["t"] == "str":
+            if name in ("screen_ku_poo", "screen_maathu") and args and args[0]["t"] == "str":
                 self.nav_targets.append((args[0]["v"], e["pos"]))
             if name in ("input_value", "input_set") and args and args[0]["t"] == "str":
                 self.used_input_names.append((args[0]["v"], args[0]["pos"]))

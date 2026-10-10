@@ -1,4 +1,5 @@
-# Style showcase - every look and animation AppPanrom has: clay, glass, soft UI (neumorphism), brutalism, minimal, gradients.
+# Style showcase - every look and animation AppPanrom has: clay, glass, soft UI (neumorphism), brutalism, minimal, gradients,
+# plus a customised top bar (title, subtitle, action button), a screen with NO top bar, and bottom tabs.
 app_uruvakku("Style Showcase")
 app_id_set("com.apppanrom.showcase")
 
@@ -8,8 +9,12 @@ function tap():
     taps = taps + 1
     toast_kaattu("Tapped " + str(taps) + " times")
 
+function info():
+    message_kaattu("Ellaa look-um animation-um oru style key thaan. Inspector-la hover pannina preview theriyum!")
+
 screen_uruvakku("home", style={"background": "#6366F1", "background_to": "#EC4899", "gradient_angle": 160}):
-    screen_title("Style Showcase")
+    navbar_uruvakku(title="Style Showcase", subtitle="glass, clay, brutal, soft, minimal", align="center", style={"glass": true, "text_color": "#FFFFFF", "corner_radius": 0}):
+        nav_action("Info", icon="i", click_pannumbodhu=info)
     column_uruvakku(style={"padding": 20, "gap": 16}):
         text_kaattu("Looks", style={"text_color": "#FFFFFF", "font_size": 28, "font_weight": "bold", "animate": "slide_up"})
 
@@ -38,3 +43,49 @@ screen_uruvakku("home", style={"background": "#6366F1", "background_to": "#EC489
         card_uruvakku(style={"background": "#E5E7EB", "neumorphic": true, "padding": 20, "gap": 8, "animate": "fade_in", "animate_delay": 0.8}):
             text_kaattu("Soft UI", style={"text_color": "#374151", "font_size": 22, "font_weight": "bold"})
             text_kaattu("Neumorphism - same colour as the surface", style={"text_color": "#6B7280"})
+    tabbar_uruvakku(style={"glass": true, "text_color": "#FFFFFF", "corner_radius": 0}):
+        tab_item("Looks", icon="*", go="home")
+        tab_item("Motion", icon="~", go="motion")
+        tab_item("Bars", icon="=", go="bars")
+
+# ---------------------------------------------------------------- motion: every animation, entering one after another
+screen_uruvakku("motion", style={"background": "#0F172A", "background_to": "#4C1D95", "gradient_angle": 160}):
+    navbar_uruvakku(title="Motion", subtitle="switch tabs to replay", back=false, style={"background": "#0F172A", "text_color": "#F8FAFC"})
+    column_uruvakku(style={"padding": 20, "gap": 12}):
+        card_uruvakku(style={"background": "#FDE68A", "clay": true, "padding": 14, "animate": "fade_in"}):
+            text_kaattu("fade_in", style={"text_color": "#7C2D12", "font_weight": "bold"})
+        card_uruvakku(style={"background": "#86EFAC", "clay": true, "padding": 14, "animate": "slide_up", "animate_delay": 0.1}):
+            text_kaattu("slide_up", style={"text_color": "#14532D", "font_weight": "bold"})
+        card_uruvakku(style={"background": "#93C5FD", "clay": true, "padding": 14, "animate": "slide_left", "animate_delay": 0.2}):
+            text_kaattu("slide_left", style={"text_color": "#1E3A8A", "font_weight": "bold"})
+        card_uruvakku(style={"background": "#F9A8D4", "clay": true, "padding": 14, "animate": "pop", "animate_delay": 0.3}):
+            text_kaattu("pop", style={"text_color": "#831843", "font_weight": "bold"})
+        card_uruvakku(style={"background": "#FDBA74", "clay": true, "padding": 14, "animate": "zoom_in", "animate_delay": 0.4}):
+            text_kaattu("zoom_in", style={"text_color": "#7C2D12", "font_weight": "bold"})
+        card_uruvakku(style={"background": "#C4B5FD", "clay": true, "padding": 14, "animate": "shake", "animate_delay": 0.6}):
+            text_kaattu("shake", style={"text_color": "#3B1F6E", "font_weight": "bold"})
+        row_uruvakku(style={"gap": 12, "justify": "space_between"}):
+            card_uruvakku(style={"background": "#FDE047", "brutal": true, "padding": 14, "width": "30%", "animate": "bounce"}):
+                text_kaattu("bounce", style={"text_color": "#111111"})
+            card_uruvakku(style={"background": "#FFFFFF", "brutal": true, "padding": 14, "width": "30%", "animate": "pulse"}):
+                text_kaattu("pulse", style={"text_color": "#111111"})
+            card_uruvakku(style={"background": "#86EFAC", "brutal": true, "padding": 14, "width": "30%", "animate": "float"}):
+                text_kaattu("float", style={"text_color": "#111111"})
+    tabbar_uruvakku(style={"background": "#0F172A", "text_color": "#F8FAFC"}):
+        tab_item("Looks", icon="*", go="home")
+        tab_item("Motion", icon="~", go="motion")
+        tab_item("Bars", icon="=", go="bars")
+
+# ---------------------------------------------------------------- bars: this screen has no top bar at all (visible=false)
+screen_uruvakku("bars", style={"background": "#FFF7ED"}):
+    navbar_uruvakku(visible=false)
+    column_uruvakku(style={"padding": 24, "gap": 14}):
+        text_kaattu("No top bar here", style={"font_size": 30, "font_weight": "bold", "text_color": "#9A3412", "animate": "pop"})
+        text_kaattu("navbar_uruvakku(visible=false) removes the bar. The tabs below still work, and they switch screens without piling up back history.", style={"text_color": "#7C2D12"})
+        card_uruvakku(style={"background": "#FED7AA", "brutal": true, "padding": 16, "gap": 6, "animate": "slide_up", "animate_delay": 0.2}):
+            text_kaattu("Customise it", style={"font_weight": "bold", "text_color": "#111111"})
+            text_kaattu("title, subtitle, left / centre / right, back arrow, action buttons and any style: gradient, glass, clay, brutal...", style={"text_color": "#111111"})
+    tabbar_uruvakku(style={"background": "#FFEDD5", "text_color": "#9A3412", "brutal": true, "corner_radius": 0}):
+        tab_item("Looks", icon="*", go="home")
+        tab_item("Motion", icon="~", go="motion")
+        tab_item("Bars", icon="=", go="bars")

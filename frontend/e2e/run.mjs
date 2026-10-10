@@ -253,6 +253,107 @@ screen_uruvakku("two"):
     await page.getByRole('button', { name: 'Delete project' }).click();
     await page.getByRole('heading', { name: 'Hot App' }).waitFor({ state: 'detached' });
   });
+  await step('top bar & tabs: Settings menu writes navbar/tabbar into every screen; hover previews and animation replay in the designer', async () => {
+    const code = () => page.locator('.cm-content').innerText();
+    const waitCode = async (re, timeout = 8000) => {
+      const end = Date.now() + timeout;
+      let last = '';
+      while (Date.now() < end) { last = await code(); if (re.test(last)) return last; await page.waitForTimeout(100); }
+      throw new Error('code never matched ' + re + '\n--- code ---\n' + last.slice(0, 1500));
+    };
+    await page.getByLabel('New project name').fill('Bar App');
+    await page.locator('label.template', { hasText: 'Style showcase' }).click();
+    await page.getByRole('button', { name: 'Create project' }).click();
+    await page.getByTestId('editor').waitFor();
+    await page.getByRole('tab', { name: 'Settings' }).click();
+    const st = page.getByTestId('settings');
+    await st.getByTestId('bars-info').getByText(/Top bar on 3\/3/).waitFor();      // the showcase customises the bar on all 3 screens
+    // one-click bar look -> every screen's navbar gets that style (the hidden-bar screen keeps visible=false)
+    await st.getByTestId('bar-indigo').click();
+    await waitCode(/navbar_uruvakku\([^)]*"background": "#4F46E5"/s);
+    // switch the bar off everywhere, then restore
+    await st.getByLabel('Show top bar').uncheck();
+    await waitCode(/visible=false/);
+    await st.getByLabel('Show top bar').check();
+    await st.getByLabel('Title position').selectOption('center');
+    await waitCode(/align="center"/);
+    // tabs: editor rows -> one tab bar per screen
+    await st.getByTestId('tabs-remove').click();                                  // the showcase starts with tabs everywhere
+    await st.getByTestId('bars-info').getByText(/tabs on 0/).waitFor();
+    await st.getByRole('button', { name: 'One tab per screen' }).click();
+    await st.getByLabel('Tab 1 icon').fill('H');
+    await st.getByTestId('tabs-apply').click();
+    await st.getByTestId('bars-info').getByText(/tabs on 3/).waitFor();
+    await st.getByTestId('tabs-remove').click();
+    await st.getByTestId('bars-info').getByText(/tabs on 0/).waitFor();
+    await st.getByTestId('bar-reset').click();
+    await st.getByTestId('bars-info').getByText(/Top bar on 0\/3/).waitFor();
+    if (/^\s*navbar_uruvakku\(/m.test(await code())) throw new Error('reset left a navbar in the code');
+    // designer: hovering an animation previews it on the canvas without touching the code; leaving restores it
+    await page.getByTestId('mode-design').click();
+    const canvas = page.getByTestId('design-canvas');
+    await canvas.locator('.ap-card').first().click({ position: { x: 6, y: 6 } });
+    await page.getByTestId('inspector').waitFor();
+    const before = (await code()).match(/"animate": "bounce"/g)?.length ?? 0;
+    const sel = canvas.locator('.ap-selected');
+    await sel.waitFor();
+    const cls = () => sel.evaluate((el) => el.className);
+    await page.getByTestId('anim-bounce').hover();
+    await page.waitForFunction(() => /ap-a-bounce/.test(document.querySelector('[data-testid=design-canvas]').shadowRoot.querySelector('.ap-selected')?.className ?? ''), null, { timeout: 8000 });
+    if (((await code()).match(/"animate": "bounce"/g)?.length ?? 0) !== before) throw new Error('hover preview changed the code');
+    await page.getByTestId('inspector').getByRole('heading', { name: 'Style' }).hover();   // move the mouse away
+    await page.waitForFunction(() => !/ap-a-bounce/.test(document.querySelector('[data-testid=design-canvas]').shadowRoot.querySelector('.ap-selected')?.className ?? ''), null, { timeout: 8000 });
+    // clicking applies it for real; replay restarts the animation
+    await page.getByTestId('anim-pop').click();
+    await waitCode(/"animate": "pop"/);
+    await page.getByTestId('anim-replay').click();
+    if (!/ap-a-pop/.test(await cls())) throw new Error('replay lost the animation class');
+    await shot(page, '12-designer-preview');
+    await page.getByRole('button', { name: 'Back to projects' }).click();
+    await page.getByRole('heading', { name: 'Bar App' }).waitFor();
+    await page.locator('li.card', { hasText: 'Bar App' }).getByRole('button', { name: 'Delete', exact: true }).click();
+    await page.getByRole('button', { name: 'Delete project' }).click();
+    await page.getByRole('heading', { name: 'Bar App' }).waitFor({ state: 'detached' });
+  });
+  await step('navbar, tabs, hidden bar and no blue tap box in a real app bundle (Chromium)', async () => {
+    const out = path.join(data, 'proj-bars');
+    const r = spawnSync('python3', ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', 'showcase.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
+    if (r.status !== 0) throw new Error('generate failed: ' + r.stderr);
+    const www = path.join(out, 'app/src/main/assets/www');
+    const srv = createServer((req, res) => {
+      const f = path.join(www, req.url.split('?')[0].replace(/^\/assets\/www\//, ''));
+      try { res.setHeader('content-type', f.endsWith('.js') ? 'text/javascript' : 'text/html'); res.end(readFileSync(f)); } catch { res.statusCode = req.url.includes('favicon') ? 204 : 404; res.end(); }
+    }).listen(8791);
+    try {
+      const b2 = await browser.newPage({ viewport: { width: 390, height: 844 } });
+      const errs = [];
+      b2.on('pageerror', (e) => errs.push(e.message));
+      b2.on('console', (c) => { if (c.type() === 'error') errs.push(c.text()); });
+      await b2.goto('http://127.0.0.1:8791/assets/www/index.html');
+      await b2.locator('.ap-bar-t', { hasText: 'Style Showcase' }).waitFor();
+      await b2.locator('.ap-bar-sub').waitFor();
+      if (await b2.locator('.ap-bar-center').count() !== 1) throw new Error('title should be centred');
+      await b2.getByRole('button', { name: 'Info', exact: true }).click();                    // nav_action with a handler
+      await b2.getByRole('alertdialog').getByText(/hover/).waitFor();
+      await b2.getByRole('button', { name: 'OK' }).click();
+      // no blue tap box / focus ring after a click
+      const btn = b2.getByRole('button', { name: 'Clay', exact: true });
+      await btn.click({ force: true });
+      const css = await btn.evaluate((el) => { const c = getComputedStyle(el); return c.outlineStyle + '|' + c.webkitTapHighlightColor; });
+      if (css !== 'none|rgba(0, 0, 0, 0)') throw new Error('tap box not removed: ' + css);
+      // tabs switch screens without history; the active tab follows; a screen can have no bar at all
+      await b2.getByRole('tab', { name: '~ Motion' }).click();
+      await b2.locator('.ap-tab-on', { hasText: 'Motion' }).waitFor();
+      await b2.locator('.ap-bar-t', { hasText: 'Motion' }).waitFor();
+      if (await b2.getByRole('button', { name: 'Back' }).count()) throw new Error('tab switch must not add back history');
+      await b2.getByRole('tab', { name: '= Bars' }).click();
+      await b2.getByText('No top bar here').waitFor();
+      if (await b2.locator('.ap-bar').count()) throw new Error('visible=false must remove the bar');
+      if (await b2.locator('.ap-tabbar').count() !== 1) throw new Error('tab bar missing');
+      await shot(b2, '13-bars');
+      if (errs.length) throw new Error('page errors: ' + errs.join('; '));
+    } finally { srv.close(); }
+  });
   await step('rename and delete (with confirmation) from the dashboard', async () => {  // (the hot-reload step already returned to the dashboard)
     await page.getByRole('button', { name: 'Rename' }).click();
     await page.getByLabel('Project name', { exact: true }).fill('Renamed App');
@@ -537,7 +638,7 @@ screen_uruvakku("home"):
       if (!/^3px\|.*5px 5px 0px/.test(brutal)) throw new Error('brutal style wrong: ' + brutal);
       const neu = await cs('Neumorphism - same colour as the surface', 'boxShadow');
       if ((neu.match(/rgba?\(/g) || []).length < 2) throw new Error('soft UI shadows missing: ' + neu);
-      const bgimg = await p4.locator('.ap-screen').evaluate((el) => getComputedStyle(el).backgroundImage);
+      const bgimg = await p4.locator('.ap-root').evaluate((el) => getComputedStyle(el).backgroundImage);
       if (!/linear-gradient/.test(bgimg)) throw new Error('screen gradient missing: ' + bgimg);
       const anim = await p4.getByRole('button', { name: 'Glass', exact: true }).evaluate((el) => getComputedStyle(el).animationName);
       if (anim !== 'ap-pop') throw new Error('animation not applied: ' + anim);
@@ -598,7 +699,7 @@ screen_uruvakku("home"):
       await m.getByRole('button', { name: 'Back' }).click();
       await m.getByText('Rs 400', { exact: true }).waitFor();
       // look switch re-skins everything; dark mode too
-      await m.getByRole('button', { name: 'Settings' }).click();
+      await m.locator('.ap-nav-act').click();   // the top bar's Settings action
       await m.getByLabel('App look').selectOption('brutal');
       const card = m.locator('.ap-card').first();
       await m.waitForFunction(() => /3px/.test(getComputedStyle(document.querySelector('.ap-card')).borderTopWidth));

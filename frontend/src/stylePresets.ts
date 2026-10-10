@@ -70,3 +70,16 @@ export const GROUPS: { id: string; label: string; keys: string[]; open?: boolean
   { id: 'text', label: 'Text', keys: ['font_size', 'font_weight', 'text_align'] },
   { id: 'layout', label: 'Layout', keys: ['gap', 'align', 'justify', 'wrap', 'scroll', 'visible'] },
 ];
+
+/** One-click top bar looks for Settings -> Top bar & tabs. Every key is set or cleared so looks never pile up. */
+const BAR_OFF: StyleChange = { background: null, background_to: null, gradient_angle: null, text_color: null, clay: null, glass: null, brutal: null, neumorphic: null, border_color: null, border_width: null, shadow: null, corner_radius: null };
+export const BAR_LOOKS: { id: string; name: string; css: string; ink: string; styles: StyleChange }[] = [
+  { id: 'default', name: 'Default', css: '#ffffff', ink: '#111', styles: { ...BAR_OFF } },
+  { id: 'indigo', name: 'Indigo', css: '#4F46E5', ink: '#fff', styles: { ...BAR_OFF, background: lit('#4F46E5'), text_color: lit('#FFFFFF') } },
+  { id: 'aurora', name: 'Aurora', css: 'linear-gradient(135deg,#6366F1,#EC4899)', ink: '#fff', styles: { ...BAR_OFF, background: lit('#6366F1'), background_to: lit('#EC4899'), gradient_angle: lit(90), text_color: lit('#FFFFFF') } },
+  { id: 'clay', name: 'Clay', css: '#C4B5FD', ink: '#3B1F6E', styles: { ...BAR_OFF, background: lit('#C4B5FD'), text_color: lit('#3B1F6E'), clay: lit(true), corner_radius: lit(0) } },
+  { id: 'glass', name: 'Glass', css: 'linear-gradient(135deg,#a5b4fc,#f9a8d4)', ink: '#fff', styles: { ...BAR_OFF, background: lit('#FFFFFF'), text_color: lit('#FFFFFF'), glass: lit(true), corner_radius: lit(0) } },
+  { id: 'brutal', name: 'Brutal', css: '#FDE047', ink: '#111', styles: { ...BAR_OFF, background: lit('#FDE047'), text_color: lit('#111111'), brutal: lit(true), corner_radius: lit(0) } },
+  { id: 'dark', name: 'Dark', css: '#111827', ink: '#fff', styles: { ...BAR_OFF, background: lit('#111827'), text_color: lit('#F9FAFB') } },
+  { id: 'minimal', name: 'Minimal', css: '#fff', ink: '#111', styles: { ...BAR_OFF, background: lit('#FFFFFF'), text_color: lit('#111827'), border_width: lit(0) } },
+];

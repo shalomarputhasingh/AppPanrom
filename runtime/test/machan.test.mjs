@@ -112,3 +112,28 @@ test('machan: settings - name shows in greeting, budget changes, reset wipes dat
   assert.ok(!texts(rt).some((x) => /Shalom/.test(x)));
   assert.deepEqual(bad(logs).map((l) => l.level + ": " + l.text), []);
 });
+
+test('machan: themed top bar with a Settings action, and bottom tabs that switch screens without history', () => {
+  const { rt, logs } = boot(src);
+  const kids = () => rt.render().children;
+  const nav = kids().find((k) => k.c === 'navbar_uruvakku');
+  assert.equal(nav.props.title, 'Machan Planner');
+  assert.equal(nav.props.align, 'center');
+  assert.ok(/vanakkam|thoongala/i.test(nav.props.subtitle));
+  assert.equal(nav.children[0].props.label, 'Settings');
+  rt.fire(nav.children[0].events.click_pannumbodhu);               // the bar action opens Settings
+  assert.equal(rt.currentScreen(), 'settings');
+  let tabs = kids().find((k) => k.c === 'tabbar_uruvakku').children;
+  assert.deepEqual(tabs.map((t) => t.props.label), ['Home', 'Velai', 'Kaasu', 'Dialogue', 'Vilayattu']);
+  rt.switchScreen('kaasu');                                        // a tab tap: replaces, no history
+  assert.equal(rt.currentScreen(), 'kaasu');
+  rt.goBack();                                                     // back goes to where we came from (home), not to settings
+  assert.equal(rt.currentScreen(), 'home');
+  for (const look of ['clay', 'glass', 'brutal', 'soft', 'minimal']) {
+    rt.setScreen('settings');
+    rt.setInputFromUI('look_input', look); rt.fire('look_maathu');
+    const bar = kids().find((k) => k.c === 'navbar_uruvakku');
+    assert.ok(bar.style.text_color, look + ' bar has a text colour');
+  }
+  assert.deepEqual(logs.filter((l) => (l.level === 'error' || l.level === 'warning') && !/vibration|clipboard/.test(l.text)).map((l) => l.text), []);
+});

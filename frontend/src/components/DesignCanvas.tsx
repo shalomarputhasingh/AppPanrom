@@ -4,6 +4,10 @@ import type { DesignTree, DropInfo } from '../types';
 
 export interface CanvasHandle {
   setScreen(name: string): void;
+  /** Shows a compiled IR on the canvas without touching the code (hover preview). */
+  preview(ir: unknown): void;
+  /** Plays the animation of the component on this source line again. */
+  replay(line: number): boolean;
 }
 
 interface Props {
@@ -43,7 +47,11 @@ export function DesignCanvas({ ir, selectedLine, onSelect, onDrop, onTree, ctrlR
       },
     });
     ctrl.current = c;
-    ctrlRef.current = { setScreen: (n) => c.setScreen(n) };
+    ctrlRef.current = {
+      setScreen: (n) => c.setScreen(n),
+      preview: (ir) => (ctrl.current as unknown as { update(ir: unknown): void } | null)?.update(ir),
+      replay: (l) => !!(ctrl.current as unknown as { replay(l: number): boolean } | null)?.replay(l),
+    };
     return () => {
       c.destroy();
       ctrl.current = null;

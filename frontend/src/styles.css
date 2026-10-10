@@ -219,3 +219,6 @@ kbd { font: 11.5px var(--mono); background: var(--panel-2); border: 1px solid va
 .ta-lead { color: var(--accent); font-weight: 600; }
 .vocab { border-collapse: collapse; } .vocab td { padding: 1px 8px 1px 0; }
 .live-badge { margin: 0; font-size: 12px; text-align: center; } .live-badge.ok { color: var(--ok); } .live-badge.paused { color: var(--warn); }
+.set-sub { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 10px 0 4px; }
+.inline-lbl { flex-direction: row !important; align-items: center; gap: 6px !important; margin: 0 !important; } .tab-icon { max-width: 54px; text-align: center; }
+.chip.replay { border-style: dashed; }
