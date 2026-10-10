@@ -1,0 +1,40 @@
+# Vanakkam App - the canonical AppPanrom sample.
+app_uruvakku("Vanakkam App")
+app_id_set("com.apppanrom.vanakkam")
+app_version_set("1.0.0")
+
+mari clicks = 0
+
+function welcome():
+    mari username = text_trim(input_value("name"))
+    clicks = clicks + 1
+    enna_na username == "":
+        toast_kaattu("Un peru ennanu sollu da nanba!")
+    illana:
+        message_kaattu("Vanakkam " + username + "!")
+
+function open_about():
+    screen_ku_poo("about")
+
+function go_back():
+    screen_back_poo()
+
+screen_uruvakku("home", style={"background": "#F3F4F6"}):
+    screen_title("Vanakkam")
+    column_uruvakku(style={"padding": 24, "gap": 16, "align": "stretch"}):
+        title("Vanakkam Nanba!", style={"text_color": "#111827", "font_size": 26, "font_weight": "bold", "text_align": "center"})
+        text_kaattu("AppPanrom-la un first app!")
+        input_uruvakku("name", label="Un peru", placeholder="Un peru enna?")
+        button("Click Pannu", click_pannumbodhu=welcome,
+               style={"background": "#2563EB", "text_color": "#FFFFFF", "corner_radius": 12})
+        enna_na clicks > 0:
+            text_kaattu("Button click count: " + str(clicks))
+        button("About", click_pannumbodhu=open_about, style={"background": "#E5E7EB", "text_color": "#111827", "corner_radius": 12})
+
+screen_uruvakku("about"):
+    screen_title("About")
+    center_ama(style={"padding": 24, "gap": 12}):
+        card_uruvakku(style={"padding": 16, "gap": 8}):
+            title("AppPanrom")
+            text_kaattu("Tanglish-la app panra language.")
+        button("Back", click_pannumbodhu=go_back)

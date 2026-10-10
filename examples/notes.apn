@@ -1,0 +1,30 @@
+# Notes - lists, loops, JSON and app-local storage (data_save_pannu is NOT encrypted).
+app_uruvakku("Notes")
+app_id_set("com.apppanrom.notes")
+
+mari notes = data_edu("notes", [])
+
+function add_note():
+    mari text = text_trim(input_value("note"))
+    enna_na text == "":
+        toast_kaattu("Note empty-a irukku")
+        return
+    append(notes, text)
+    data_save_pannu("notes", notes)
+    input_set("note", "")
+
+function clear_notes():
+    notes = []
+    data_clear_pannu()
+
+screen_uruvakku("home"):
+    screen_title("Notes (" + str(length(notes)) + ")")
+    column_uruvakku(style={"padding": 16, "gap": 12}):
+        input_uruvakku("note", label="New note", placeholder="Ennatha ezhudhanum?", submit_pannumbodhu=add_note)
+        button("Add note", click_pannumbodhu=add_note)
+        enna_na length(notes) == 0:
+            text_kaattu("No notes yet.", style={"text_color": "#6B7280"})
+        illana:
+            card_uruvakku(style={"padding": 8}):
+                list_kaattu(notes)
+            button("Clear all", click_pannumbodhu=clear_notes, style={"background": "#EF4444"})

@@ -1,0 +1,6 @@
+{
+  "name": "apppanrom-runtime",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": { "test": "node --test test/runtime.test.mjs" }
+}
