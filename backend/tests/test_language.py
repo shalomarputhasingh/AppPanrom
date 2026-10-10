@@ -142,6 +142,11 @@ def test_style_validation():
     assert "bad_style_value" in codes(s('{"shadow": 4}'))[1]
     assert "bad_style_value" in codes(s('{"shadow": "huge"}'))[1]
     assert "bad_style_value" in codes(s('{"clay": "yes"}'))[1]
+    for good in ['{"glass": true}', '{"neumorphic": true, "background": "#E5E7EB"}', '{"brutal": true}', '{"background": "#FFF", "background_to": "#000", "gradient_angle": 90}',
+                 '{"animate": "pop", "animate_duration": 0.5, "animate_delay": 1}']:
+        assert compile_source(s(good)).ok, good
+    for bad in ['{"animate": "wobble"}', '{"animate_duration": 0}', '{"animate_duration": 99}', '{"gradient_angle": 361}', '{"background_to": "red"}', '{"glass": 1}']:
+        assert "bad_style_value" in codes(s(bad))[1], bad
     assert "style_not_applicable" in codes(s('{"gap": 4}'))[1]
     assert "bad_style" in codes(s('5'))[1]
 

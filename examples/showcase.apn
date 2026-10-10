@@ -1,0 +1,40 @@
+# Style showcase - every look and animation AppPanrom has: clay, glass, soft UI (neumorphism), brutalism, minimal, gradients.
+app_uruvakku("Style Showcase")
+app_id_set("com.apppanrom.showcase")
+
+mari taps = 0
+
+function tap():
+    taps = taps + 1
+    toast_kaattu("Tapped " + str(taps) + " times")
+
+screen_uruvakku("home", style={"background": "#6366F1", "background_to": "#EC4899", "gradient_angle": 160}):
+    screen_title("Style Showcase")
+    column_uruvakku(style={"padding": 20, "gap": 16}):
+        text_kaattu("Looks", style={"text_color": "#FFFFFF", "font_size": 28, "font_weight": "bold", "animate": "slide_up"})
+
+        card_uruvakku(style={"glass": true, "padding": 20, "gap": 8, "animate": "slide_up", "animate_delay": 0.1}):
+            text_kaattu("Glass", style={"text_color": "#FFFFFF", "font_size": 22, "font_weight": "bold"})
+            text_kaattu("Frosted, translucent, blurred backdrop", style={"text_color": "#FFFFFF"})
+
+        card_uruvakku(style={"background": "#FDBA74", "clay": true, "padding": 20, "gap": 8, "animate": "slide_up", "animate_delay": 0.2}):
+            text_kaattu("Clay", style={"text_color": "#7C2D12", "font_size": 22, "font_weight": "bold"})
+            text_kaattu("Soft, puffy and pastel", style={"text_color": "#7C2D12"})
+
+        card_uruvakku(style={"background": "#FDE047", "brutal": true, "padding": 20, "gap": 8, "animate": "slide_up", "animate_delay": 0.3}):
+            text_kaattu("Brutal", style={"text_color": "#111111", "font_size": 22})
+            text_kaattu("Thick outline, hard shadow", style={"text_color": "#111111"})
+
+        card_uruvakku(style={"background": "#FFFFFF", "border_width": 1, "border_color": "#E5E7EB", "corner_radius": 8, "padding": 20, "gap": 8, "animate": "slide_up", "animate_delay": 0.4}):
+            text_kaattu("Minimal", style={"text_color": "#111827", "font_size": 22, "font_weight": "medium"})
+            text_kaattu("White, hairline border, quiet", style={"text_color": "#6B7280"})
+
+        row_uruvakku(style={"gap": 12, "justify": "space_between"}):
+            button("Glass", click_pannumbodhu=tap, style={"glass": true, "text_color": "#FFFFFF", "width": "30%", "height": 56, "animate": "pop", "animate_delay": 0.5})
+            button("Clay", click_pannumbodhu=tap, style={"background": "#86EFAC", "clay": true, "text_color": "#14532D", "width": "30%", "height": 56, "animate": "pop", "animate_delay": 0.6})
+            button("Brutal", click_pannumbodhu=tap, style={"background": "#FFFFFF", "brutal": true, "text_color": "#111111", "width": "30%", "height": 56, "animate": "pop", "animate_delay": 0.7})
+        button("Tapped: " + str(taps), click_pannumbodhu=tap, style={"background": "#F9A8D4", "clay": true, "text_color": "#831843", "height": 60, "animate": "pulse"})
+
+        card_uruvakku(style={"background": "#E5E7EB", "neumorphic": true, "padding": 20, "gap": 8, "animate": "fade_in", "animate_delay": 0.8}):
+            text_kaattu("Soft UI", style={"text_color": "#374151", "font_size": 22, "font_weight": "bold"})
+            text_kaattu("Neumorphism - same colour as the surface", style={"text_color": "#6B7280"})

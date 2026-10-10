@@ -796,6 +796,34 @@
     '.ap-empty::after{content:"Drop components here";color:var(--muted);font-size:12px}',
     '.ap-clay{transition:transform .08s ease,filter .08s ease}',
     'button.ap-clay:active:not(:disabled){transform:translateY(3px) scale(.985);filter:brightness(.97)}',
+    'button.ap-neu:active:not(:disabled){box-shadow:var(--ap-pressed)!important}',
+    '.ap-neu,.ap-brutal,.ap-glass{transition:transform .08s ease,box-shadow .1s ease}',
+    'button.ap-brutal:active:not(:disabled){transform:translate(3px,3px);box-shadow:2px 2px 0 var(--ap-ink,#111)!important}',
+    '.ap-btn{transition:transform .08s ease,filter .12s ease,box-shadow .12s ease}',
+    '.ap-btn:active:not(:disabled){transform:scale(.97)}',
+    '.ap-btn:hover:not(:disabled){filter:brightness(1.05)}',
+    '.ap-anim{animation-fill-mode:both;animation-timing-function:cubic-bezier(.22,.8,.3,1);animation-duration:.5s}',
+    '.ap-a-fade_in{animation-name:ap-fade_in}.ap-a-slide_up{animation-name:ap-slide_up}.ap-a-slide_down{animation-name:ap-slide_down}',
+    '.ap-a-slide_left{animation-name:ap-slide_left}.ap-a-slide_right{animation-name:ap-slide_right}.ap-a-zoom_in{animation-name:ap-zoom_in}',
+    '.ap-a-pop{animation-name:ap-pop;animation-duration:.45s}.ap-a-bounce{animation-name:ap-bounce;animation-duration:1s;animation-iteration-count:infinite}',
+    '.ap-a-shake{animation-name:ap-shake;animation-duration:.6s}.ap-a-pulse{animation-name:ap-pulse;animation-duration:1.4s;animation-iteration-count:infinite}',
+    '.ap-a-float{animation-name:ap-float;animation-duration:3s;animation-iteration-count:infinite;animation-timing-function:ease-in-out}',
+    '.ap-a-spin{animation-name:ap-spin;animation-duration:1.2s;animation-iteration-count:infinite;animation-timing-function:linear}',
+    '@keyframes ap-fade_in{from{opacity:0}to{opacity:1}}',
+    '@keyframes ap-slide_up{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}',
+    '@keyframes ap-slide_down{from{opacity:0;transform:translateY(-24px)}to{opacity:1;transform:none}}',
+    '@keyframes ap-slide_left{from{opacity:0;transform:translateX(32px)}to{opacity:1;transform:none}}',
+    '@keyframes ap-slide_right{from{opacity:0;transform:translateX(-32px)}to{opacity:1;transform:none}}',
+    '@keyframes ap-zoom_in{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:none}}',
+    '@keyframes ap-pop{0%{opacity:0;transform:scale(.6)}60%{opacity:1;transform:scale(1.08)}100%{transform:none}}',
+    '@keyframes ap-bounce{0%,100%{transform:translateY(0)}40%{transform:translateY(-14px)}60%{transform:translateY(-6px)}}',
+    '@keyframes ap-shake{0%,100%{transform:none}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}',
+    '@keyframes ap-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}',
+    '@keyframes ap-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}',
+    '@keyframes ap-spin{to{transform:rotate(360deg)}}',
+    '.ap-enter{animation:ap-enter .22s cubic-bezier(.22,.8,.3,1) both}',
+    '@keyframes ap-enter{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:none}}',
+    '@media (prefers-reduced-motion:reduce){.ap-anim,.ap-enter{animation:none!important}.ap-btn,.ap-clay,.ap-neu,.ap-brutal,.ap-glass{transition:none!important}}',
     '.ap-drop-inside{outline:2px dashed #2563eb!important;outline-offset:-2px;background-image:linear-gradient(rgba(37,99,235,.08),rgba(37,99,235,.08))}',
     '.ap-drop-ind{position:absolute;background:#2563eb;pointer-events:none;z-index:20;border-radius:2px;display:none}',
     '.ap-toast{position:absolute;left:16px;right:16px;bottom:24px;background:#111827;color:#fff;padding:10px 14px;border-radius:10px;z-index:11;font-size:14px;text-align:center;overflow-wrap:anywhere}',
@@ -837,6 +865,62 @@
     ].join(',');
   }
 
+  function rgbOf(c, fallback) { return hexRgb(c) || fallback; }
+
+  /** Neumorphism ("soft UI"): the element is the same colour as its surface, lit from the top left. */
+  function neuShadows(bg) {
+    var base = rgbOf(bg, [229, 231, 235]);
+    var dark = rgba(mix(base, [0, 0, 0], 0.22), 0.55), light = rgba(mix(base, [255, 255, 255], 0.75), 0.95);
+    return {
+      raised: '8px 8px 16px ' + dark + ',-8px -8px 16px ' + light,
+      pressed: 'inset 5px 5px 10px ' + dark + ',inset -5px -5px 10px ' + light
+    };
+  }
+
+  function applyLooks(el, s) {
+    var bgRgb = rgbOf(s.background, [255, 255, 255]);
+    if (s.background_to && !s.glass) {
+      el.style.background = 'linear-gradient(' + (('gradient_angle' in s) ? s.gradient_angle : 135) + 'deg,' + (s.background || '#FFFFFF') + ',' + s.background_to + ')';
+    } else if (s.background_to && s.glass) {
+      var to = rgbOf(s.background_to, [255, 255, 255]);
+      el.style.background = 'linear-gradient(' + (('gradient_angle' in s) ? s.gradient_angle : 135) + 'deg,' + rgba(bgRgb, 0.35) + ',' + rgba(to, 0.15) + ')';
+    }
+    if (s.glass === true) {
+      // glassmorphism: translucent fill, blurred backdrop, light edge. Needs something colourful behind it.
+      if (!s.background_to) el.style.background = rgba(bgRgb, 0.28);
+      el.style.backdropFilter = 'blur(18px) saturate(170%)';
+      el.style.webkitBackdropFilter = 'blur(18px) saturate(170%)';
+      el.style.boxShadow = '0 8px 32px rgba(31,38,135,.22), inset 0 1px 0 rgba(255,255,255,.55)';
+      if (!('border_width' in s)) { el.style.border = '1px solid rgba(255,255,255,.5)'; }
+      if (!('corner_radius' in s)) el.style.borderRadius = '24px';
+      el.classList.add('ap-glass');
+    }
+    if (s.neumorphic === true) {
+      var neu = neuShadows(s.background);
+      if (!s.background) el.style.background = 'rgb(229,231,235)';
+      el.style.boxShadow = neu.raised;
+      el.style.setProperty('--ap-pressed', neu.pressed);
+      if (!('corner_radius' in s)) el.style.borderRadius = '20px';
+      if (!('border_width' in s)) el.style.border = '0';
+      el.classList.add('ap-neu');
+    }
+    if (s.brutal === true) {
+      // neo-brutalism: thick black outline, hard offset shadow, no blur, square-ish corners
+      var ink = s.border_color || '#111111';
+      el.style.border = (('border_width' in s) ? s.border_width : 3) + 'px solid ' + ink;
+      el.style.boxShadow = '5px 5px 0 ' + ink;
+      el.style.setProperty('--ap-ink', ink);
+      if (!('corner_radius' in s)) el.style.borderRadius = '0';
+      if (!('font_weight' in s)) el.style.fontWeight = '800';
+      el.classList.add('ap-brutal');
+    }
+    if (s.animate && s.animate !== 'none') {
+      el.classList.add('ap-anim', 'ap-a-' + s.animate);
+      if ('animate_duration' in s) el.style.animationDuration = s.animate_duration + 's';
+      if ('animate_delay' in s) el.style.animationDelay = s.animate_delay + 's';
+    }
+  }
+
   function applyStyle(el, s, isCol) {
     function px(n) { return n + 'px'; }
     function size(v, dim) {
@@ -863,6 +947,7 @@
     if ('shadow' in s && SHADOWS[s.shadow]) {
       el.style.boxShadow = s.clay === true && s.shadow !== 'none' ? el.style.boxShadow + ',' + SHADOWS[s.shadow] : SHADOWS[s.shadow];
     }
+    applyLooks(el, s);
     if ('opacity' in s) el.style.opacity = String(s.opacity);
     if ('visible' in s && !s.visible) el.style.display = 'none';
     if ('width' in s) { var w = size(s.width, 'w'); if (w) el.style.width = w; }
@@ -936,7 +1021,16 @@
     };
     rt = createRuntime(ir, realHost);
 
-    function buildView(v) {
+    /** Content signature of a view subtree: equal signatures mean the DOM for it is already up to date. */
+    function viewSig(v) {
+      if (v.__sig) return v.__sig;
+      var sg = JSON.stringify([v.c, v.props, v.style, v.events, v.pos]);
+      if (v.children) sg += '[' + v.children.map(viewSig).join(',') + ']';
+      v.__sig = sg;
+      return sg;
+    }
+
+    function buildView(v, shellOnly) {
       var s = v.style, node, c = v.c, p = v.props;
       if (c === 'title') { node = el('h1', 'ap-title', p.text); node.setAttribute('role', 'heading'); node.setAttribute('aria-level', '1'); }
       else if (c === 'text_kaattu') node = el('p', 'ap-text', p.text);
@@ -947,6 +1041,7 @@
         if (design && !p.enabled) node.style.opacity = '0.5';
         var h = v.events.click_pannumbodhu;
         if (h && !design) node.addEventListener('click', function () { rt.fire(h); });
+        node.setAttribute('data-aps', 'b:' + (h || '') + (design ? ':d' : ''));
       } else if (INPUT_KIND[c]) node = buildInput(v);
       else if (c === 'image_kaattu') { node = el('img', 'ap-image'); if (p.src) node.src = p.src; node.alt = p.alt; }
       else if (c === 'list_kaattu') {
@@ -968,9 +1063,11 @@
       } else if (c === 'divider_kaattu') { node = el('hr', 'ap-divider'); }
       else {
         node = el('div', 'ap-flow' + (c === 'row_uruvakku' ? ' ap-row' : '') + (c === 'center_ama' ? ' ap-center' : '') + (c === 'card_uruvakku' ? ' ap-card' : ''));
-        (v.children || []).forEach(function (k) { node.appendChild(buildView(k)); });
+        if (!shellOnly) (v.children || []).forEach(function (k) { node.appendChild(buildView(k)); });
       }
       applyStyle(node, s);
+      node.__sig = viewSig(v);
+      node.__c = c;
       if (design) {
         node.setAttribute('data-ap-line', String(v.pos[0]));
         node.setAttribute('data-ap-c', c);
@@ -1031,7 +1128,78 @@
       }
       input.disabled = !p.enabled;
       input.setAttribute('data-ap-input', p.name);
+      // listeners capture these constants; two views with the same signature can share one DOM node (see morph)
+      wrap.setAttribute('data-aps', [v.c, p.name, change || '', submit || '', design ? 'd' : ''].join('|'));
       return wrap;
+    }
+
+
+    // ---- DOM patching: reuse the existing nodes instead of rebuilding the screen on every event.
+    // Reused nodes keep focus, caret, scroll position and running animations; only what changed is touched.
+    function compatible(o, n) {
+      if (o.nodeType !== n.nodeType) return false;
+      if (o.nodeType === 3) return true;
+      if (o.nodeType !== 1 || o.tagName !== n.tagName) return false;
+      return o.getAttribute('data-aps') === n.getAttribute('data-aps');
+    }
+    function syncAttrs(o, n) {
+      var i, a;
+      for (i = o.attributes.length - 1; i >= 0; i--) {
+        a = o.attributes[i].name;
+        if (!n.hasAttribute(a) && !(a === 'class' && false)) o.removeAttribute(a);
+      }
+      for (i = 0; i < n.attributes.length; i++) {
+        a = n.attributes[i];
+        var val = a.value;
+        if (a.name === 'class' && o.classList.contains('ap-enter')) val += ' ap-enter'; // do not cut the screen-enter animation short
+        if (o.getAttribute(a.name) !== val) o.setAttribute(a.name, val);
+      }
+    }
+    function morphNode(o, n) {
+      if (o.nodeType === 3) { if (o.nodeValue !== n.nodeValue) o.nodeValue = n.nodeValue; return; }
+      syncAttrs(o, n);
+      morphChildren(o, n);
+      var t = o.tagName;
+      if (t === 'INPUT') {
+        if (o.type === 'checkbox') { if (o.checked !== n.checked) o.checked = n.checked; }
+        else if (o.value !== n.value) o.value = n.value;
+      } else if (t === 'SELECT') {
+        if (o.value !== n.value) o.value = n.value;
+      }
+    }
+    function morphChildren(o, n) {
+      var i = 0, nk, ok;
+      while (n.firstChild) {
+        nk = n.firstChild; ok = o.childNodes[i];
+        if (!ok) o.appendChild(nk);
+        else if (compatible(ok, nk)) { morphNode(ok, nk); n.removeChild(nk); }
+        else o.replaceChild(nk, ok);
+        i++;
+      }
+      while (o.childNodes.length > i) o.removeChild(o.lastChild);
+    }
+
+
+    /** Patches the live children of `live` to match `views`, skipping every subtree whose signature is unchanged. */
+    function reconcileChildren(live, views) {
+      var i = 0;
+      views.forEach(function (v) {
+        var ol = live.childNodes[i], sig = viewSig(v);
+        if (ol && ol.__sig === sig) { i++; return; }
+        if (ol && ol.__c === v.c && CONTAINERS[v.c]) {
+          var shell = buildView(v, true);
+          syncAttrs(ol, shell);
+          reconcileChildren(ol, v.children || []);
+          ol.__sig = sig;
+        } else {
+          var nn = buildView(v);
+          if (ol && compatible(ol, nn)) { morphNode(ol, nn); ol.__sig = sig; ol.__c = v.c; }
+          else if (ol) live.replaceChild(nn, ol);
+          else live.appendChild(nn);
+        }
+        i++;
+      });
+      while (live.childNodes.length > i) live.removeChild(live.lastChild);
     }
 
     function render() {
@@ -1041,15 +1209,22 @@
         restore = { name: active.getAttribute('data-ap-input') };
         try { restore.s = active.selectionStart; restore.e = active.selectionEnd; } catch (e) { /* not selectable */ }
       }
-      var prevScreen = app.getAttribute('data-screen'), prevScroll = 0;
-      var oldMain = app.querySelector('.ap-screen');
-      if (oldMain) prevScroll = oldMain.scrollTop;
-      Array.prototype.slice.call(app.children).forEach(function (c) { if (!/ap-overlay|ap-toast|ap-drop-ind/.test(c.className)) c.remove(); });
+      var prevScreen = app.getAttribute('data-screen');
+      var oldMain = null, oldBar = null;
+      Array.prototype.slice.call(app.children).forEach(function (c) {
+        if (/ap-overlay|ap-toast|ap-drop-ind/.test(c.className)) return;
+        if (c.classList.contains('ap-screen')) oldMain = c;
+        else if (c.classList.contains('ap-bar')) oldBar = c;
+        else c.remove(); // an earlier error box
+      });
 
       var view;
       try { view = rt.render(); } catch (e) {
         if (!e || !e.isApError) throw e;
         realHost.log('error', rt.format(e));
+        if (oldMain) oldMain.remove();
+        if (oldBar) oldBar.remove();
+        app.removeAttribute('data-screen');
         var errBox = el('div', 'ap-error', 'This screen has an error and cannot be drawn.\n\n' + rt.format(e));
         errBox.setAttribute('role', 'alert');
         app.insertBefore(errBox, app.firstChild);
@@ -1061,29 +1236,39 @@
         var back = el('button', '', '\u2190');
         back.type = 'button';
         back.setAttribute('aria-label', 'Back');
+        back.setAttribute('data-aps', 'back');
         back.addEventListener('click', function () { rt.goBack(); });
         bar.appendChild(back);
       }
       bar.appendChild(el('span', '', view.title));
       var main = el('div', 'ap-screen');
       main.setAttribute('role', 'main');
-      view.children.forEach(function (k) { main.appendChild(buildView(k)); });
+      var samePatch = !!(oldMain && oldBar && prevScreen === view.screen);
+      if (!samePatch) view.children.forEach(function (k) { main.appendChild(buildView(k)); });
       applyStyle(main, view.style);
       if (design) {
         main.setAttribute('data-ap-screen', view.screen);
         if (!view.children.length) main.classList.add('ap-empty');
       }
-      app.insertBefore(main, app.firstChild);
-      app.insertBefore(bar, main);
+      if (oldMain && oldBar && prevScreen === view.screen) {
+        syncAttrs(oldMain, main);   // same screen: patch in place (keeps focus, scroll, animations)
+        reconcileChildren(oldMain, view.children);
+        morphNode(oldBar, bar);
+      } else {
+        if (oldMain) oldMain.remove();
+        if (oldBar) oldBar.remove();
+        if (prevScreen !== null && prevScreen !== view.screen && !design) main.classList.add('ap-enter');
+        app.insertBefore(main, app.firstChild);
+        app.insertBefore(bar, main);
+      }
       app.setAttribute('data-screen', view.screen);
-      if (prevScreen === view.screen) main.scrollTop = prevScroll;
       if (design) {
         applySelection();
         if (design.onTree) design.onTree({ screen: view.screen, screens: ir.screen_order, title: view.title, children: outline(view.children) });
       }
       if (restore) {
         var target = app.querySelector('[data-ap-input="' + restore.name.replace(/["\\]/g, '\\$&') + '"]');
-        if (target) {
+        if (target && target !== (root && root.activeElement)) {
           target.focus();
           if (restore.s != null) { try { target.setSelectionRange(restore.s, restore.e); } catch (e) { /* ignore */ } }
         }

@@ -49,7 +49,15 @@
       "opacity",
       "visible",
       "shadow",
-      "clay"
+      "clay",
+      "background_to",
+      "gradient_angle",
+      "glass",
+      "neumorphic",
+      "brutal",
+      "animate",
+      "animate_duration",
+      "animate_delay"
     ],
     "text": [
       "text_color",
@@ -171,6 +179,51 @@
     },
     "clay": {
       "type": "bool"
+    },
+    "background_to": {
+      "type": "color"
+    },
+    "gradient_angle": {
+      "type": "number",
+      "min": 0,
+      "max": 360
+    },
+    "glass": {
+      "type": "bool"
+    },
+    "neumorphic": {
+      "type": "bool"
+    },
+    "brutal": {
+      "type": "bool"
+    },
+    "animate": {
+      "type": "enum",
+      "values": [
+        "none",
+        "fade_in",
+        "slide_up",
+        "slide_down",
+        "slide_left",
+        "slide_right",
+        "zoom_in",
+        "pop",
+        "bounce",
+        "shake",
+        "pulse",
+        "float",
+        "spin"
+      ]
+    },
+    "animate_duration": {
+      "type": "number",
+      "min": 0.1,
+      "max": 10
+    },
+    "animate_delay": {
+      "type": "number",
+      "min": 0,
+      "max": 10
     }
   },
   "unsupported_styles": [

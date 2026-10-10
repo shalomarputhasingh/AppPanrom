@@ -1,4 +1,4 @@
-import { PRESETS, PALETTES, SCREEN_THEMES, GROUPS, type StyleChange } from '../stylePresets';
+import { PRESETS, PALETTES, SCREEN_THEMES, GROUPS, ANIMATIONS, type StyleChange } from '../stylePresets';
 import { useEffect, useRef, useState } from 'react';
 import type { DesignInput, DesignNodeInfo, DesignValue, Spec } from '../types';
 
@@ -21,7 +21,8 @@ const LABELS: Record<string, string> = {
   background: 'Background', text_color: 'Text color', border_color: 'Border color', padding: 'Padding', margin: 'Margin', gap: 'Gap',
   corner_radius: 'Corner radius', border_width: 'Border width', font_size: 'Font size', font_weight: 'Font weight', text_align: 'Text align',
   opacity: 'Opacity', width: 'Width', height: 'Height', align: 'Align (cross axis)', justify: 'Justify (main axis)', wrap: 'Wrap',
-  scroll: 'Scroll', visible: 'Visible', shadow: 'Shadow', clay: 'Clay (3D soft)', click_pannumbodhu: 'On click', change_aagumbodhu: 'On change', submit_pannumbodhu: 'On submit',
+  scroll: 'Scroll', visible: 'Visible', shadow: 'Shadow', clay: 'Clay (3D soft)', glass: 'Glass', neumorphic: 'Soft UI (neumorphic)', brutal: 'Brutal',
+  background_to: 'Gradient to', gradient_angle: 'Gradient angle', animate: 'Animation', animate_duration: 'Duration (s)', animate_delay: 'Delay (s)', click_pannumbodhu: 'On click', change_aagumbodhu: 'On change', submit_pannumbodhu: 'On submit',
 };
 const label = (k: string) => LABELS[k] ?? k;
 
@@ -108,7 +109,7 @@ function hex6(v: string): string {
   return m ? `#${m[1]}${m[1]}${m[2]}${m[2]}${m[3]}${m[3]}`.toLowerCase() : '#000000';
 }
 
-const SLIDER_MAX: Record<string, number> = { corner_radius: 100, padding: 80, margin: 80, gap: 80, border_width: 20, font_size: 96, opacity: 1 };
+const SLIDER_MAX: Record<string, number> = { corner_radius: 100, padding: 80, margin: 80, gap: 80, border_width: 20, font_size: 96, opacity: 1, gradient_angle: 360, animate_duration: 5, animate_delay: 5 };
 
 function Swatches({ onPick, disabled, current }: { onPick(hex: string): void; disabled: boolean; current?: string }) {
   return (
@@ -148,7 +149,7 @@ function StyleRow({ k, def, value, disabled, onOp, node }: {
     );
     extra = <Swatches disabled={disabled} current={lit === undefined ? undefined : String(lit)} onPick={(c) => set({ literal: c })} />;
   } else if (def.type === 'number') {
-    const step = k === 'opacity' ? 0.05 : 1;
+    const step = k === 'opacity' ? 0.05 : k === 'animate_duration' || k === 'animate_delay' ? 0.1 : 1;
     control = (
       <>
         <input type="range" className="slider" aria-label={`${label(k)} slider`} disabled={disabled} min={def.min} max={SLIDER_MAX[k] ?? def.max ?? 100} step={step}
@@ -263,7 +264,7 @@ function StylePanel({ node, spec, disabled, onOp }: { node: DesignNodeInfo; spec
           {SCREEN_THEMES.map((t) => (
             <button key={t.name} type="button" className="preset" disabled={disabled} title={`${t.name} screen`}
               onClick={() => apply(t.styles)}>
-              <span className="preset-chip" style={{ background: (t.styles.background as { literal: string }).literal }} aria-hidden="true" />
+              <span className="preset-chip" style={{ background: t.css }} aria-hidden="true" />
               {t.name}
             </button>
           ))}
@@ -277,6 +278,15 @@ function StylePanel({ node, spec, disabled, onOp }: { node: DesignNodeInfo; spec
         return (
           <details key={`${node.line}-${g.id}`} className="insp-group" open={g.open || setCount > 0}>
             <summary>{g.label}{setCount > 0 && <span className="count">{setCount}</span>}</summary>
+            {g.id === 'motion' && (
+              <div className="chips" role="group" aria-label="Animations">
+                {ANIMATIONS.map((a) => (
+                  <button key={a.id} type="button" className={`chip ${node.style.animate?.literal?.value === a.id ? 'on' : ''}`} disabled={disabled} data-testid={`anim-${a.id}`}
+                    onClick={() => void run({ kind: 'set_style', line: node.line, key: 'animate', value: { literal: a.id } })}>{a.name}</button>
+                ))}
+                {node.style.animate && <button type="button" className="chip" disabled={disabled} onClick={() => void run({ kind: 'set_style', line: node.line, key: 'animate', value: null })}>None</button>}
+              </div>
+            )}
             {keys.map((k) => (
               <StyleRow key={`${node.line}-${k}`} k={k} def={spec.styles[k]} value={node.style[k]} disabled={disabled} onOp={onOp} node={node} />
             ))}

@@ -426,6 +426,58 @@ screen_uruvakku("home"):
       if (errs.length) throw new Error('page errors: ' + errs.join('; '));
     } finally { srv.close(); }
   });
+  await step('looks (glass, brutal, soft UI, gradient), animation and DOM patching in Chromium', async () => {
+    const serve = async (example, port) => {
+      const out = path.join(data, 'proj-' + example);
+      const r = spawnSync('python3', ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', example + '.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
+      if (r.status !== 0) throw new Error('generate failed: ' + r.stderr);
+      const www = path.join(out, 'app/src/main/assets/www');
+      return createServer((req, res) => {
+        const f = path.join(www, req.url.split('?')[0].replace(/^\/assets\/www\//, ''));
+        try { res.setHeader('content-type', f.endsWith('.js') ? 'text/javascript' : 'text/html'); res.end(readFileSync(f)); } catch { res.statusCode = 404; res.end(); }
+      }).listen(port);
+    };
+    const srv = await serve('showcase', 8797);
+    try {
+      const p4 = await browser.newPage({ viewport: { width: 390, height: 900 } });
+      const errs = [];
+      p4.on('pageerror', (e) => errs.push(e.message));
+      await p4.goto('http://127.0.0.1:8797/assets/www/index.html');
+      await p4.getByText('Frosted, translucent, blurred backdrop').waitFor();
+      const cs = (text, prop) => p4.getByText(text, { exact: true }).locator('xpath=ancestor-or-self::*[contains(@class,"ap-card")][1]').evaluate((el, pr) => getComputedStyle(el)[pr], prop);
+      const glass = await cs('Frosted, translucent, blurred backdrop', 'backdropFilter');
+      if (!/blur/.test(glass)) throw new Error('glass: no backdrop blur: ' + glass);
+      const brutal = await p4.getByText('Thick outline, hard shadow', { exact: true }).locator('xpath=ancestor::*[contains(@class,"ap-card")][1]').evaluate((el) => { const c = getComputedStyle(el); return c.borderTopWidth + '|' + c.boxShadow; });
+      if (!/^3px\|.*5px 5px 0px/.test(brutal)) throw new Error('brutal style wrong: ' + brutal);
+      const neu = await cs('Neumorphism - same colour as the surface', 'boxShadow');
+      if ((neu.match(/rgba?\(/g) || []).length < 2) throw new Error('soft UI shadows missing: ' + neu);
+      const bgimg = await p4.locator('.ap-screen').evaluate((el) => getComputedStyle(el).backgroundImage);
+      if (!/linear-gradient/.test(bgimg)) throw new Error('screen gradient missing: ' + bgimg);
+      const anim = await p4.getByRole('button', { name: 'Glass', exact: true }).evaluate((el) => getComputedStyle(el).animationName);
+      if (anim !== 'ap-pop') throw new Error('animation not applied: ' + anim);
+      // patching: tapping a button updates the label but keeps the very same DOM node (no rebuild -> no animation restart)
+      const tapBtn = p4.getByRole('button', { name: /^Tapped:/ });
+      await tapBtn.evaluate((el) => { window.__keep = el; });
+      await tapBtn.click({ force: true }); // an infinitely pulsing element is never 'stable' for Playwright
+      await p4.getByRole('button', { name: 'Tapped: 1' }).waitFor();
+      if (!(await p4.evaluate(() => document.querySelector('[data-aps^="b:tap"].ap-a-pulse') === window.__keep))) throw new Error('DOM node was rebuilt instead of patched');
+      await p4.waitForTimeout(1800); // let the staggered entrance animations finish
+      await shot(p4, '08-showcase');
+      if (errs.length) throw new Error('page errors: ' + errs.join('; '));
+    } finally { srv.close(); }
+    // patching keeps focus and caret while typing (the old renderer re-created the input on every keystroke)
+    const srv2 = await serve('vanakkam', 8796);
+    try {
+      const p5 = await browser.newPage({ viewport: { width: 390, height: 800 } });
+      await p5.goto('http://127.0.0.1:8796/assets/www/index.html');
+      const inp = p5.getByLabel('Un peru');
+      await inp.evaluate((el) => { window.__inp = el; });
+      await inp.click();
+      await p5.keyboard.type('Shalom', { delay: 5 });
+      const same = await p5.evaluate(() => document.querySelector('input[data-ap-input="name"]') === window.__inp && document.activeElement === window.__inp && window.__inp.value === 'Shalom');
+      if (!same) throw new Error('input was re-created / lost focus while typing');
+    } finally { srv2.close(); }
+  });
   await step('no uncaught page errors', async () => {
     if (pageErrors.length) throw new Error(pageErrors.join('; '));
   });

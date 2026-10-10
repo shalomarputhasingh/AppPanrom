@@ -156,7 +156,7 @@ literals, and for dynamic values the offending key is ignored with a console war
 
 | Group | Keys |
 |---|---|
-| box | `background`, `padding`, `margin`, `width`, `height`, `corner_radius`, `border_width`, `border_color`, `opacity`, `visible`, `shadow`, `clay` |
+| box | `background`, `padding`, `margin`, `width`, `height`, `corner_radius`, `border_width`, `border_color`, `opacity`, `visible`, `shadow`, `clay`, `glass`, `neumorphic`, `brutal`, `background_to`, `gradient_angle`, `animate`, `animate_duration`, `animate_delay` |
 | text | `text_color`, `font_size`, `font_weight`, `text_align` |
 | flow | `gap`, `align`, `justify`, `wrap`, `scroll` |
 
@@ -183,6 +183,14 @@ literals, and for dynamic values the offending key is ignored with a console war
 | `visible` | `true` / `false` |
 | `shadow` | `none` \| `soft` \| `medium` \| `strong` (drop shadow) |
 | `clay` | `true` / `false` - claymorphism (see below) |
+| `glass` | `true` / `false` - glassmorphism (see below) |
+| `neumorphic` | `true` / `false` - neumorphism / soft UI (see below) |
+| `brutal` | `true` / `false` - neo-brutalism (see below) |
+| `background_to` | hex color - second colour of a linear gradient that starts at `background` |
+| `gradient_angle` | number 0-360 (default 135) |
+| `animate` | `none` \| `fade_in` \| `slide_up` \| `slide_down` \| `slide_left` \| `slide_right` \| `zoom_in` \| `pop` \| `bounce` \| `shake` \| `pulse` \| `float` \| `spin` |
+| `animate_duration` | seconds, 0.1-10 |
+| `animate_delay` | seconds, 0-10 |
 
 Layout notes: containers stack children vertically (`column_uruvakku`, the default for `card_uruvakku`), horizontally
 (`row_uruvakku`) or centre them on both axes (`center_ama`). `align` is the cross axis (default `stretch`; rows
@@ -195,7 +203,22 @@ highlight (top-left) and an inner shade (bottom-right), all computed from the el
 used for the shadows). Unless you set them, `corner_radius` defaults to 24 and the border to none. Buttons sink slightly when pressed. Use big `corner_radius`
 values, pastel backgrounds and generous `padding` for the best result. `shadow` can be combined with `clay` to add an extra outer shadow.
 
-**Not supported yet** (compile error): `gradient`, `font_family`, `text_decor`, `line_height`, the other named
+**Looks.** Each look is one switch that derives everything from the element's own `background` colour. Use one look per element.
+
+| Look | Style | What it does |
+|---|---|---|
+| Glassmorphism | `"glass": true` | translucent fill, blurred backdrop, light edge, soft shadow. Needs something colourful *behind* it, e.g. a screen with `background` + `background_to` |
+| Neumorphism | `"neumorphic": true` | element in the same colour as its surface, light shadow top-left, dark bottom-right; buttons look pressed in when tapped. Give the element and its parent the same `background` |
+| Neo-brutalism | `"brutal": true` | thick black border (`border_color` / `border_width` change it), hard offset shadow, square corners, heavy text; buttons "snap" down when pressed |
+| Minimalism | (no switch) | `{"background": "#FFFFFF", "border_width": 1, "border_color": "#E5E7EB", "corner_radius": 8}` with generous `padding`; the Studio's *Minimal* preset writes this |
+| Gradients | `"background"` + `"background_to"` (+ `"gradient_angle"`) | linear gradient on any box or screen |
+
+**Animation.** `animate` plays when the component first appears (entrance: `fade_in`, `slide_*`, `zoom_in`, `pop`; attention: `shake`) or loops (`bounce`, `pulse`, `float`, `spin`).
+`animate_duration` and `animate_delay` are in seconds, so `animate_delay` set from a loop counter gives a staggered list. Because the screen is *patched*
+rather than rebuilt after each event, an animation does not restart every time the app redraws, and only genuinely new components animate. Screens slide
+in when you navigate. The OS "reduce motion" setting disables all animation. Buttons always give a small press feedback.
+
+**Not supported yet** (compile error): `gradient` (use `background_to`), `font_family`, `text_decor`, `line_height`, the other named
 themes. Responsive behaviour comes only from flex layout and percentage widths (no breakpoints).
 
 ## 7. Standard library
