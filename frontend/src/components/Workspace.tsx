@@ -13,6 +13,8 @@ import { Editor, type EditorHandle } from './Editor';
 import { PhonePreview, type PreviewState } from './PhonePreview';
 import { ReferencePanel } from './ReferencePanel';
 import { SettingsPanel } from './SettingsPanel';
+import { ShortcutsDialog } from './ShortcutsDialog';
+import { ThemeToggle } from './ThemeToggle';
 
 type Bottom = 'console' | 'diagnostics' | 'build' | 'inspector';
 type Side = 'files' | 'design' | 'settings' | 'reference';
@@ -40,6 +42,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
   const [newFile, setNewFile] = useState('');
   const [fileError, setFileError] = useState<string | null>(null);
   const [confirmExample, setConfirmExample] = useState<string | null>(null);
+  const [showKeys, setShowKeys] = useState(false);
   const [confirmDeleteFile, setConfirmDeleteFile] = useState<string | null>(null);
   // ---- designer state
   const [mode, setMode] = useState<Mode>('run');
@@ -177,10 +180,15 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); void run(); }
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); void doSave(); }
+      else if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+        const t = e.target as HTMLElement | null;
+        if (!t || !(t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) { e.preventDefault(); setShowKeys(true); }
+      }
     };
     window.addEventListener('keydown', on);
     return () => window.removeEventListener('keydown', on);
-  }, [run]);
+  }, [run, doSave]);
 
   // ---- designer: every action is a text edit of main.apn; the editor, autosave and compiler pick it up like typing
   const applyDesignEdit = useCallback(async (op: Record<string, unknown>, quiet = false): Promise<string | null> => {
@@ -353,7 +361,9 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
         <h1 className="proj-name" title={project.app_id}>{project.name}</h1>
         <span className={`save-state ${save}`} data-testid="save-state" role="status">{saveLabel}</span>
         <div className="spacer" />
-        <button className="btn" onClick={() => void doSave()} disabled={save === 'saved' || save === 'saving'}>Save</button>
+        <ThemeToggle />
+        <button className="btn" onClick={() => setShowKeys(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">⌨</button>
+        <button className="btn" onClick={() => void doSave()} disabled={save === 'saved' || save === 'saving'} title="Save (Ctrl+S)">Save</button>
         <button className="btn primary" onClick={() => void run()} data-testid="run-btn" title="Run (Ctrl+Enter)">▶ Run</button>
         <button className="btn" onClick={() => setBottom('build')} data-testid="goto-build">Build APK</button>
       </header>
@@ -477,6 +487,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
           permissions={(designIr as { permissions?: AppPermission[] } | null)?.permissions ?? []} />}
       </section>
 
+      {showKeys && <ShortcutsDialog onClose={() => setShowKeys(false)} />}
       {confirmExample !== null && (
         <Dialog title="Replace your code?" confirmLabel="Replace" danger onConfirm={() => void useExample(confirmExample)} onCancel={() => setConfirmExample(null)}>
           <p>The example will replace the contents of <code>main.apn</code>. Use undo (Ctrl+Z) in the editor if you change your mind before it saves.</p>

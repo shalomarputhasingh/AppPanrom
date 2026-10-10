@@ -225,6 +225,22 @@ screen_uruvakku("two"):
     await page.getByTestId('inspector').getByRole('alert').filter({ hasText: /Invalid value for style/ }).waitFor();
     if (/9999/.test(await code())) throw new Error('invalid value was written to the code');
 
+    // 3b. one-click presets, palette swatches, clear all (each is a single batched edit of the code)
+    await page.getByTestId('preset-clay').click();
+    await waitCode(/"clay": true/);
+    const clayShadow = await canvas.locator('.ap-btn', { hasText: 'Save' }).evaluate((el) => getComputedStyle(el).boxShadow);
+    if (!/inset/.test(clayShadow)) throw new Error('clay preset not rendered on the canvas: ' + clayShadow);
+    await page.getByTestId('inspector').getByRole('button', { name: 'Clay pastels #FCA5A5' }).first().click();
+    await waitCode(/"background": "#FCA5A5"/);
+    await page.getByTestId('preset-outline').click();
+    await waitCode(/"border_width": 2/);
+    if (/"clay"/.test(await code())) throw new Error('outline preset should remove clay');
+    await page.getByRole('button', { name: /Clear all styles/ }).click();
+    await waitCode(/button\("Save"\)\s*$/m);
+    await bg.fill('#16A34A'); // later steps expect the green button
+    await bg.press('Enter');
+    await waitCode(/button\("Save", style=\{"background": "#16A34A"\}\)/);
+
     // 4. new handler wired to the button; code shows the function
     const onClick = page.getByTestId('inspector').getByLabel('On click', { exact: true });
     await onClick.selectOption({ label: '＋ New handler…' });

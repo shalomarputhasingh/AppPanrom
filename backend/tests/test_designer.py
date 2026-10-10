@@ -269,3 +269,23 @@ def test_many_random_edits_keep_source_compilable():
         r = compile_source(out["source"])
         assert not [d for d in r.diagnostics if d.severity == "error" and d.code in ("syntax", "bad_indent", "needs_block", "undefined_handler")], out["source"]
         s = out["source"]
+
+
+def test_set_styles_is_one_atomic_edit_and_works_on_screens():
+    src = 'app_uruvakku("x")\nscreen_uruvakku("home"):\n    title("a")\n'
+    r = apply_op(src, {"kind": "set_styles", "line": 3, "styles": {"background": {"literal": "#C4B5FD"}, "clay": {"literal": True}, "corner_radius": {"literal": 28}}})
+    assert 'title("a", style={"background": "#C4B5FD", "clay": true, "corner_radius": 28})' in r["source"]
+    r2 = apply_op(r["source"], {"kind": "set_styles", "line": 3, "styles": {"clay": None, "background": None, "corner_radius": None}})
+    assert 'title("a")' in r2["source"] and "style" not in r2["source"].split("\n")[2]
+    # screens can be styled too
+    r3 = apply_op(src, {"kind": "set_styles", "line": 2, "styles": {"background": {"literal": "#E9E4FF"}}})
+    assert 'screen_uruvakku("home", style={"background": "#E9E4FF"}):' in r3["source"]
+
+
+def test_set_styles_rejects_bad_batches_without_partial_changes():
+    src = 'app_uruvakku("x")\nscreen_uruvakku("home"):\n    title("a")\n'
+    for styles in [{}, {"nope": {"literal": 1}}, {"clay": {"literal": "yes"}}, {"padding": {"literal": 5}, "gradient": {"literal": "#fff"}}, "x"]:
+        with pytest.raises(DesignError):
+            apply_op(src, {"kind": "set_styles", "line": 3, "styles": styles})
+    with pytest.raises(DesignError):  # 'gap' is a flow style; a title does not take it
+        apply_op(src, {"kind": "set_styles", "line": 3, "styles": {"gap": {"literal": 4}}})

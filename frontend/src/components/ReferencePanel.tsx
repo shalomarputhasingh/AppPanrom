@@ -1,13 +1,7 @@
 import type { Spec } from '../types';
-import counter from '../../../examples/counter.apn?raw';
-import notes from '../../../examples/notes.apn?raw';
-import vanakkam from '../../../examples/vanakkam.apn?raw';
+import { EXAMPLE_LIST } from '../templates';
 
-export const EXAMPLES = [
-  { name: 'Vanakkam (inputs, 2 screens)', code: vanakkam },
-  { name: 'Counter (state, row layout)', code: counter },
-  { name: 'Notes (lists, storage)', code: notes },
-];
+export const EXAMPLES = EXAMPLE_LIST;
 
 const SYNTAX = `mari count = 0                      # variable (declare once, then: count = count + 1)
 function add(a, b):                 # function, 4-space indent

@@ -352,15 +352,15 @@ def apply_op(source: str, op: dict) -> dict:
     lines, _ = _split(source)
     fn = {
         "insert": _op_insert, "move": _op_move, "delete": _op_delete, "duplicate": _op_duplicate,
-        "set_prop": _op_set_prop, "set_style": _op_set_style, "set_event": _op_set_event,
+        "set_prop": _op_set_prop, "set_style": _op_set_style, "set_styles": _op_set_styles, "set_event": _op_set_event,
         "add_screen": _op_add_screen, "create_handler": _op_create_handler,
     }.get(kind)
     if fn is None:
         raise DesignError(f"Unknown operation '{kind}'.", "bad_op")
-    before = len(_errors(source)) if kind in ("set_prop", "set_style", "set_event") else 0
+    before = len(_errors(source)) if kind in ("set_prop", "set_style", "set_styles", "set_event") else 0
     new_lines, select = fn(program, lines, source, op)
     new_source = _check(_join(new_lines))
-    if kind in ("set_prop", "set_style", "set_event"):
+    if kind in ("set_prop", "set_style", "set_styles", "set_event"):
         after = _errors(new_source)
         if len(after) > before:
             raise DesignError(after[0].message + (f" {after[0].suggestion}" if after[0].suggestion else ""), "invalid_value")
@@ -477,15 +477,17 @@ def _op_set_prop(program, lines, source, op):
     return _replace_header(lines, node, header_text(node, _indent_of(node))), node["pos"][0]
 
 
-def _op_set_style(program, lines, source, op):
-    loc = _comp_for_edit(program, op)
-    node, key = loc.node, op.get("key")
-    spec = load_spec()
+def _style_target(program, op) -> Loc:
+    """A component or a screen: both can carry a style dict."""
+    return _need_component(program, int(op["line"]))
+
+
+def _set_style_key(node, key, raw, spec) -> None:
     if key not in spec["styles"]:
         raise DesignError(f"Unknown style '{key}'.", "unknown_style")
-    allowed = {k for g in spec["components"][node["f"]]["style_groups"] for k in spec["style_groups"][g]}
-    if key not in allowed:
-        raise DesignError(f"Style '{key}' does not apply to {node['f']}.", "style_not_applicable")
+    groups = spec["screen_style_groups"] if is_screen(node) else spec["components"][node["f"]]["style_groups"]
+    if key not in {k for g in groups for k in spec["style_groups"][g]}:
+        raise DesignError(f"Style '{key}' does not apply to {'screens' if is_screen(node) else node['f']}.", "style_not_applicable")
     style = node["kw"].get("style")
     if style is None or style["t"] != "dict":
         if style is not None:
@@ -493,7 +495,7 @@ def _op_set_style(program, lines, source, op):
         style = {"t": "dict", "items": [], "pos": [0, 0]}
     items = list(style["items"])
     idx = next((i for i, (k, _) in enumerate(items) if k["t"] == "str" and k["v"] == key), None)
-    val = _value_node(op.get("value"))
+    val = _value_node(raw)
     if val is None:
         if idx is not None:
             del items[idx]
@@ -506,6 +508,23 @@ def _op_set_style(program, lines, source, op):
         node["kw"]["style"] = style
     else:
         node["kw"].pop("style", None)
+
+
+def _op_set_style(program, lines, source, op):
+    node = _style_target(program, op).node
+    _set_style_key(node, op.get("key"), op.get("value"), load_spec())
+    return _replace_header(lines, node, header_text(node, _indent_of(node))), node["pos"][0]
+
+
+def _op_set_styles(program, lines, source, op):
+    """Applies several style changes at once ({"styles": {key: value|null}}); one edit, one undo step. null removes a key."""
+    styles = op.get("styles")
+    if not isinstance(styles, dict) or not styles or len(styles) > 30:
+        raise DesignError("'styles' must be a dictionary of 1-30 style keys.", "bad_value")
+    node = _style_target(program, op).node
+    spec = load_spec()
+    for key, raw in styles.items():
+        _set_style_key(node, key, raw, spec)
     return _replace_header(lines, node, header_text(node, _indent_of(node))), node["pos"][0]
 
 

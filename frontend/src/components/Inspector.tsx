@@ -1,3 +1,4 @@
+import { PRESETS, PALETTES, SCREEN_THEMES, GROUPS, type StyleChange } from '../stylePresets';
 import { useEffect, useRef, useState } from 'react';
 import type { DesignInput, DesignNodeInfo, DesignValue, Spec } from '../types';
 
@@ -40,11 +41,12 @@ function CommitInput({ value, onCommit, disabled, type = 'text', mono, ...rest }
   );
 }
 
-function Row({ name, children, error }: { name: string; children: React.ReactNode; error?: string | null }) {
+function Row({ name, children, error, extra }: { name: string; children: React.ReactNode; error?: string | null; extra?: React.ReactNode }) {
   return (
     <div className="insp-row">
       <span className="insp-label">{label(name)}</span>
       <div className="insp-ctl">{children}</div>
+      {extra && <div className="insp-extra">{extra}</div>}
       {error && <div className="error-text small insp-err" role="alert">{error}</div>}
     </div>
   );
@@ -106,6 +108,23 @@ function hex6(v: string): string {
   return m ? `#${m[1]}${m[1]}${m[2]}${m[2]}${m[3]}${m[3]}`.toLowerCase() : '#000000';
 }
 
+const SLIDER_MAX: Record<string, number> = { corner_radius: 100, padding: 80, margin: 80, gap: 80, border_width: 20, font_size: 96, opacity: 1 };
+
+function Swatches({ onPick, disabled, current }: { onPick(hex: string): void; disabled: boolean; current?: string }) {
+  return (
+    <div className="swatches" role="group" aria-label="Colour palette">
+      {PALETTES.map((p) => (
+        <div key={p.name} className="swatch-row" title={p.name}>
+          {p.colors.map((c) => (
+            <button key={c} type="button" className={`swatch ${current?.toLowerCase() === c.toLowerCase() ? 'on' : ''}`} style={{ background: c }}
+              aria-label={`${p.name} ${c}`} title={`${p.name} ${c}`} disabled={disabled} onClick={() => onPick(c)} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function StyleRow({ k, def, value, disabled, onOp, node }: {
   k: string; def: Spec['styles'][string]; value?: DesignValue; disabled: boolean; onOp: OnOp; node: DesignNodeInfo;
 }) {
@@ -115,6 +134,7 @@ function StyleRow({ k, def, value, disabled, onOp, node }: {
   const timer = useRef<number>();
   useEffect(() => () => window.clearTimeout(timer.current), []);
   let control;
+  let extra: React.ReactNode = null;
   if (value && !value.literal) {
     control = <CommitInput mono aria-label={`${label(k)} (expression)`} value={value.expr} disabled={disabled} onCommit={(t) => set(t.trim() ? { expr: t } : null)} />;
   } else if (def.type === 'color') {
@@ -126,10 +146,17 @@ function StyleRow({ k, def, value, disabled, onOp, node }: {
           onCommit={(t) => set(t.trim() === '' ? null : { literal: t.trim() })} />
       </>
     );
+    extra = <Swatches disabled={disabled} current={lit === undefined ? undefined : String(lit)} onPick={(c) => set({ literal: c })} />;
   } else if (def.type === 'number') {
+    const step = k === 'opacity' ? 0.05 : 1;
     control = (
-      <CommitInput type="number" aria-label={label(k)} value={lit === undefined ? '' : String(lit)} disabled={disabled}
-        min={def.min} max={def.max} step={k === 'opacity' ? 0.1 : 1} onCommit={(t) => set(t === '' ? null : { literal: Number(t) })} />
+      <>
+        <input type="range" className="slider" aria-label={`${label(k)} slider`} disabled={disabled} min={def.min} max={SLIDER_MAX[k] ?? def.max ?? 100} step={step}
+          value={lit === undefined ? (def.min ?? 0) : Number(lit)}
+          onChange={(e) => { const v = Number(e.target.value); window.clearTimeout(timer.current); timer.current = window.setTimeout(() => set({ literal: v }), 120); }} />
+        <CommitInput type="number" aria-label={label(k)} value={lit === undefined ? '' : String(lit)} disabled={disabled}
+          min={def.min} max={def.max} step={step} onCommit={(t) => set(t === '' ? null : { literal: Number(t) })} />
+      </>
     );
   } else if (def.type === 'size') {
     control = (
@@ -151,7 +178,7 @@ function StyleRow({ k, def, value, disabled, onOp, node }: {
     );
   }
   return (
-    <Row name={k} error={error}>
+    <Row name={k} error={error} extra={extra}>
       {control}
       {value && <button className="btn small" aria-label={`Reset ${label(k)}`} title="Remove this style" disabled={disabled} onClick={() => set(null)}>×</button>}
     </Row>
@@ -197,9 +224,83 @@ function EventRow({ ev, fn, node, disabled, onOp, onGoto, onCreateHandler }: {
   );
 }
 
+
+/** Style section: one-click looks, then grouped, collapsible controls. */
+function StylePanel({ node, spec, disabled, onOp }: { node: DesignNodeInfo; spec: Spec | null; disabled: boolean; onOp: OnOp }) {
+  const { error, run } = useOp(onOp);
+  if (node.style_dynamic) return <section><h4>Style</h4><p className="muted small">This style is computed in code; edit it in the editor.</p></section>;
+  if (!spec) return null;
+  const isScreen = node.kind === 'screen';
+  const allowed = new Set(node.allowed.style);
+  const apply = (styles: StyleChange, fallbackBg?: string) => {
+    const out: StyleChange = {};
+    for (const [k, v] of Object.entries(styles)) if (allowed.has(k)) out[k] = v;
+    // clay/outline look wrong without a colour: add a sensible one only if the component has none
+    if (fallbackBg && allowed.has('background') && !node.style.background && !('background' in out)) out.background = { literal: fallbackBg };
+    if (Object.keys(out).length) void run({ kind: 'set_styles', line: node.line, styles: out });
+  };
+  const clearAll = () => {
+    const out: StyleChange = {};
+    for (const k of Object.keys(node.style)) out[k] = null;
+    if (Object.keys(out).length) void run({ kind: 'set_styles', line: node.line, styles: out });
+  };
+  const used = Object.keys(node.style).length;
+  return (
+    <section data-testid="style-panel">
+      <h4>Style</h4>
+      {!isScreen ? (
+        <div className="presets" role="group" aria-label="Style presets">
+          {PRESETS.map((p) => (
+            <button key={p.id} type="button" className="preset" data-testid={`preset-${p.id}`} title={p.hint} disabled={disabled}
+              onClick={() => apply(p.styles, p.fallbackBackground)}>
+              <span className={`preset-chip preset-${p.id}`} aria-hidden="true" />
+              {p.name}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="presets" role="group" aria-label="Screen themes">
+          {SCREEN_THEMES.map((t) => (
+            <button key={t.name} type="button" className="preset" disabled={disabled} title={`${t.name} screen`}
+              onClick={() => apply(t.styles)}>
+              <span className="preset-chip" style={{ background: (t.styles.background as { literal: string }).literal }} aria-hidden="true" />
+              {t.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {error && <div className="error-text small" role="alert">{error}</div>}
+      {GROUPS.map((g) => {
+        const keys = g.keys.filter((k) => allowed.has(k) && spec.styles[k]);
+        if (!keys.length) return null;
+        const setCount = keys.filter((k) => node.style[k]).length;
+        return (
+          <details key={`${node.line}-${g.id}`} className="insp-group" open={g.open || setCount > 0}>
+            <summary>{g.label}{setCount > 0 && <span className="count">{setCount}</span>}</summary>
+            {keys.map((k) => (
+              <StyleRow key={`${node.line}-${k}`} k={k} def={spec.styles[k]} value={node.style[k]} disabled={disabled} onOp={onOp} node={node} />
+            ))}
+          </details>
+        );
+      })}
+      {used > 0 && <button type="button" className="btn small clear-all" disabled={disabled} onClick={clearAll}>Clear all styles ({used})</button>}
+    </section>
+  );
+}
+
 export function Inspector({ node, spec, disabled, onOp, onDelete, onDuplicate, onGoto, onCreateHandler }: Props) {
   if (!node) {
-    return <div className="panel-body"><p className="muted">Select a component on the phone or in the outline to edit its properties.</p></div>;
+    return (
+      <div className="panel-body empty-insp">
+        <p><strong>Nothing selected</strong></p>
+        <p className="muted">Click a component on the phone (or in the Outline) to edit it. Click the empty screen area to style the whole screen.</p>
+        <ul className="tips muted small">
+          <li>Try a one-click look: <b>Clay</b>, <b>Elevated</b>, <b>Outline</b>…</li>
+          <li>Pick colours from the palette, or drag the sliders.</li>
+          <li><kbd>Del</kbd> deletes · <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicates · drag to move.</li>
+        </ul>
+      </div>
+    );
   }
   const isScreen = node.kind === 'screen';
   return (
@@ -227,13 +328,7 @@ export function Inspector({ node, spec, disabled, onOp, onDelete, onDuplicate, o
             ))}
           </section>
         )}
-        <section>
-          <h4>Style</h4>
-          {node.style_dynamic && <p className="muted small">This style is computed in code; edit it in the editor.</p>}
-          {!node.style_dynamic && spec && node.allowed.style.map((k) => (
-            <StyleRow key={`${node.line}-${k}`} k={k} def={spec.styles[k]} value={node.style[k]} disabled={disabled} onOp={onOp} node={node} />
-          ))}
-        </section>
+        <StylePanel node={node} spec={spec} disabled={disabled} onOp={onOp} />
       </div>
     </div>
   );

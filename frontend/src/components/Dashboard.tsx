@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import type { Project } from '../types';
 import { Dialog } from './Dialog';
+import { TEMPLATES } from '../templates';
+import { ThemeToggle } from './ThemeToggle';
 
 export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
@@ -9,6 +11,7 @@ export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
   const [name, setName] = useState('');
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState<Project | null>(null);
+  const [template, setTemplate] = useState('default');
 
   const load = useCallback(() => {
     api.projects().then(setProjects, (e) => setError(e.message));
@@ -20,6 +23,14 @@ export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
     setError(null);
     try {
       const p = await api.createProject(name.trim());
+      const t = TEMPLATES.find((x) => x.id === template);
+      if (t?.code) await api.writeFile(p.id, 'main.apn', t.code);
+      if (t?.icon) {
+        try {
+          const blob = await (await fetch(t.icon)).blob();
+          await api.uploadIcon(p.id, new File([blob], 'icon.png', { type: 'image/png' }));
+        } catch { /* the icon is a nicety; the project is still usable without it */ }
+      }
       setName('');
       onOpen(p.id);
     } catch (err) {
@@ -55,6 +66,7 @@ export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
           <h1>AppPanrom Studio</h1>
           <p className="muted">Tanglish-la app panna oru studio. Write code, preview it live, build an Android APK.</p>
         </div>
+        <ThemeToggle />
       </header>
 
       <form className="row create" onSubmit={create}>
@@ -62,6 +74,16 @@ export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
         <input id="new-name" value={name} maxLength={60} placeholder="New project name (e.g. Vanakkam App)" onChange={(e) => setName(e.target.value)} />
         <button className="btn primary" disabled={!name.trim()}>Create project</button>
       </form>
+      <fieldset className="templates" aria-label="Start from">
+        <legend className="muted small">Start from</legend>
+        {TEMPLATES.map((t) => (
+          <label key={t.id} className={`template ${template === t.id ? 'on' : ''}`}>
+            <input type="radio" name="template" value={t.id} checked={template === t.id} onChange={() => setTemplate(t.id)} />
+            <strong>{t.name}</strong>
+            <span className="muted small">{t.blurb}</span>
+          </label>
+        ))}
+      </fieldset>
       {error && <p className="error-text" role="alert">{error}</p>}
 
       {projects === null && !error && <p className="muted">Loading projects…</p>}
