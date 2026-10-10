@@ -1,4 +1,4 @@
-import type { Build, CompileResult, Project, Spec, SystemStatus } from './types';
+import type { Build, BuildKind, CompileResult, DesignNodeInfo, Project, Spec, SystemStatus } from './types';
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string, public details?: unknown) {
@@ -43,7 +43,25 @@ export const api = {
   deleteFile: (id: string, name: string) => req<void>('DELETE', `/api/projects/${id}/files/${encodeURIComponent(name)}`),
   validate: (id: string, source: string) => req<CompileResult>('POST', `/api/projects/${id}/validate`, { source }),
   preview: (id: string, source: string) => req<CompileResult>('POST', `/api/projects/${id}/preview`, { source }),
-  startBuild: (id: string) => req<Build>('POST', `/api/projects/${id}/builds`),
+  designEdit: (id: string, source: string, op: Record<string, unknown>) =>
+    req<{ source: string; line: number | null }>('POST', `/api/projects/${id}/design/edit`, { source, op }),
+  designNode: (id: string, source: string, line: number) =>
+    req<DesignNodeInfo>('POST', `/api/projects/${id}/design/node`, { source, line }),
+  startBuild: (id: string, kind: BuildKind) => req<Build>('POST', `/api/projects/${id}/builds`, { kind }),
+  iconUrl: (id: string) => `/api/projects/${id}/icon`,
+  uploadIcon: async (id: string, file: File) => {
+    let res: Response;
+    try {
+      res = await fetch(`/api/projects/${id}/icon`, { method: 'PUT', headers: { 'Content-Type': 'image/png' }, body: file });
+    } catch {
+      throw new ApiError(0, 'network', 'Cannot reach the AppPanrom backend.');
+    }
+    if (!res.ok) {
+      const e = (await res.json().catch(() => null))?.error;
+      throw new ApiError(res.status, e?.code ?? 'error', e?.message ?? `Upload failed (${res.status})`);
+    }
+  },
+  deleteIcon: (id: string) => req<void>('DELETE', `/api/projects/${id}/icon`),
   builds: (id: string) => req<{ builds: Build[] }>('GET', `/api/projects/${id}/builds`).then((r) => r.builds),
   build: (id: string) => req<Build>('GET', `/api/builds/${id}`),
   buildLog: (id: string, offset: number) =>

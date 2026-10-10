@@ -120,3 +120,40 @@ def format_problems(result: dict) -> str:
         if not c["ok"]:
             lines.append(f"  - {c['name']}: {c['detail']}\n      fix: {c['fix']}")
     return "\n".join(lines)
+
+
+def check_signing(s: Settings) -> dict:
+    """Whether release signing is configured. Reports only booleans and paths, never secrets."""
+    problems = []
+    if not s.keystore_path:
+        problems.append("APPANROM_KEYSTORE is not set")
+    elif not s.keystore_path.is_file():
+        problems.append("the keystore file does not exist")
+    if not s.keystore_password:
+        problems.append("APPANROM_KEYSTORE_PASSWORD is not set")
+    if not s.key_alias:
+        problems.append("APPANROM_KEY_ALIAS is not set")
+    return {
+        "configured": not problems,
+        "detail": "Release signing key configured." if not problems else "Release signing is not configured: " + "; ".join(problems) + ".",
+        "fix": "Create a keystore with `python -m apppanrom.cli make-keystore <path> --alias <alias>`, then set APPANROM_KEYSTORE, "
+               "APPANROM_KEYSTORE_PASSWORD and APPANROM_KEY_ALIAS (and APPANROM_KEY_PASSWORD if different) before starting the backend. "
+               "Keep the keystore and passwords out of git and back them up: losing the key means you cannot update the app.",
+    }
+
+
+def find_apksigner(s: Settings) -> str | None:
+    if not s.android_home or not (s.android_home / "build-tools").is_dir():
+        return None
+    def key(p: Path):
+        return tuple(int(x) if x.isdigit() else 0 for x in p.name.split("."))
+    for d in sorted((s.android_home / "build-tools").iterdir(), key=key, reverse=True):
+        if (d / "apksigner").is_file():
+            return str(d / "apksigner")
+    return None
+
+
+def find_jarsigner(s: Settings) -> str | None:
+    if s.java_home and (s.java_home / "bin" / "jarsigner").is_file():
+        return str(s.java_home / "bin" / "jarsigner")
+    return shutil.which("jarsigner")

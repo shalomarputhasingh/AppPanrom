@@ -304,3 +304,46 @@ test('dictionary keys named like JS builtins are safe', () => {
   assert.equal(run('mari d = {}\nd["__proto__"] = 5\nd["constructor"] = 1\nreturn length(d)'), 2);
   assert.equal(run('mari d = {"a": 1}\nreturn dict_get(d, "toString", "none")'), 'none');
 });
+
+test('summa is a no-op that keeps empty containers/handlers valid', () => {
+  const { rt } = boot('function noop():\n    summa\nscreen_uruvakku("home"):\n    column_uruvakku():\n        summa\n');
+  rt.fire('noop');
+  const v = rt.render();
+  assert.deepEqual(v.children[0].children, []);
+});
+
+test('device features go through the host and are validated and render-guarded', () => {
+  const calls = [];
+  const device = { clipboard: (t) => calls.push(['copy', t]), vibrate: (ms) => calls.push(['vib', ms]) };
+  const src = `function go():
+    clipboard_copy("hello " + "nanba")
+    vibrate_pannu(50)
+function bad():
+    vibrate_pannu(0)
+function sneaky():
+    clipboard_copy("x")
+    return 1
+screen_uruvakku("home"):
+    button("b", click_pannumbodhu=go)
+`;
+  const { rt } = boot(src, { device });
+  rt.fire('go');
+  assert.deepEqual(calls, [['copy', 'hello nanba'], ['vib', 50]]);
+  assert.throws(() => rt.callFunction('bad', []), /1 to 5000/);
+  const { rt: rt2 } = boot('function sneaky():\n    clipboard_copy("x")\n    return 1\nscreen_uruvakku("home"):\n    mari z = sneaky()\n    title("x")\n', { device });
+  assert.throws(() => rt2.render(), /cannot be used while the screen is being drawn/);
+});
+
+test('device features degrade to warnings when unsupported', () => {
+  const { rt, logs } = boot('function go():\n    clipboard_copy("x")\n    vibrate_pannu(10)\nscreen_uruvakku("home"):\n    button("b", click_pannumbodhu=go)\n');
+  rt.fire('go');
+  assert.ok(logs.some((l) => l.level === 'warning' && /clipboard/.test(l.text)));
+  assert.ok(logs.some((l) => l.level === 'warning' && /vibrat/.test(l.text)));
+});
+
+test('setScreen shows a specific screen for design tooling', () => {
+  const { rt } = boot('screen_uruvakku("a"):\n    title("A")\nscreen_uruvakku("b"):\n    title("B")\n');
+  assert.equal(rt.setScreen('b'), true);
+  assert.equal(rt.render().children[0].props.text, 'B');
+  assert.equal(rt.setScreen('zzz'), false);
+});

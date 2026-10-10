@@ -18,11 +18,19 @@ from pathlib import Path
 from ..config import Settings
 from ..db import Database
 from .generate import GenerateError, generate_project
-from .prereqs import check_prerequisites, format_problems, gradle_bin
+from .prereqs import check_prerequisites, check_signing, find_apksigner, find_jarsigner, format_problems, gradle_bin
 
 BUILD_ID_RE = re.compile(r"^b_[0-9a-f]{12}$")
 MIN_APK_BYTES = 50_000
-APK_REL = Path("app/build/outputs/apk/debug/app-debug.apk")
+# kind -> (gradle task, output path inside the generated project, file suffix, is release)
+KINDS = {
+    "debug_apk": ("assembleDebug", Path("app/build/outputs/apk/debug/app-debug.apk"), "debug.apk", False),
+    "release_apk": ("assembleRelease", Path("app/build/outputs/apk/release/app-release.apk"), "release.apk", True),
+    "release_aab": ("bundleRelease", Path("app/build/outputs/bundle/release/app-release.aab"), "release.aab", True),
+}
+SIGNING_LABEL = {
+    "debug_apk": "debug key (testing only; not for the Play Store)",
+}
 PASSTHROUGH_ENV = ("PATH", "HOME", "LANG", "JAVA_TOOL_OPTIONS", "http_proxy", "https_proxy", "HTTP_PROXY",
                    "HTTPS_PROXY", "no_proxy", "NO_PROXY", "SSL_CERT_FILE")
 TERMINAL = ("succeeded", "failed")
@@ -50,6 +58,33 @@ def verify_apk(path: Path) -> str | None:
     if not any(n.endswith("apppanrom-runtime.js") for n in names):
         return "APK does not contain the AppPanrom runtime."
     return None
+
+
+def verify_aab(path: Path) -> str | None:
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return "AAB file was not produced."
+    if size < MIN_APK_BYTES:
+        return f"AAB is only {size} bytes, which is too small to be a real app bundle."
+    try:
+        with zipfile.ZipFile(path) as z:
+            names = set(z.namelist())
+    except zipfile.BadZipFile:
+        return "Output is not a valid AAB (zip) file."
+    if "BundleConfig.pb" not in names or "base/manifest/AndroidManifest.xml" not in names:
+        return "AAB is missing BundleConfig.pb or the base module manifest."
+    if not any(n.endswith("apppanrom-runtime.js") for n in names):
+        return "AAB does not contain the AppPanrom runtime."
+    return None
+
+
+def _run_tool(cmd: list[str], env: dict | None = None, timeout: int = 120) -> tuple[int, str]:
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL, env=env)
+    except (OSError, subprocess.SubprocessError) as e:
+        return 1, f"{type(e).__name__}: {e}"
+    return p.returncode, (p.stdout or "") + (p.stderr or "")
 
 
 class BuildManager:
@@ -82,7 +117,7 @@ class BuildManager:
         has_artifact = bool(row["artifact_path"]) and not row["artifact_deleted"] and row["status"] == "succeeded"
         return {
             "id": row["id"], "project_id": row["project_id"], "status": row["status"], "kind": row["kind"],
-            "signing": "debug keystore (not suitable for Play Store)" if row["kind"] == "debug" else row["kind"],
+            "signing": row.get("signing") or SIGNING_LABEL.get(row["kind"], "release key (not yet verified)"),
             "app_id": row["app_id"], "app_name": row["app_name"], "version": row["version"],
             "created_at": row["created_at"], "started_at": row["started_at"], "finished_at": row["finished_at"],
             "duration_s": row["duration_s"], "exit_code": row["exit_code"],
@@ -138,16 +173,22 @@ class BuildManager:
             shutil.rmtree(self.s.builds_dir / r["id"], ignore_errors=True)
 
     # ---- lifecycle
-    def submit(self, project_id: str, ir: dict) -> dict:
+    def submit(self, project_id: str, ir: dict, kind: str = "debug_apk", icon: Path | None = None) -> dict:
+        if kind not in KINDS:
+            raise ValueError(f"Unknown build kind {kind!r}")
         build_id = "b_" + uuid.uuid4().hex[:12]
         (self.s.builds_dir / build_id).mkdir(parents=True)
+        if icon is not None:  # snapshot the icon so later edits can't change a queued build
+            snap = self.s.builds_dir / build_id / "icon.png"
+            shutil.copyfile(icon, snap)
+            icon = snap
         app = ir["app"]
         self.db.execute(
             "INSERT INTO builds (id, project_id, status, kind, app_id, app_name, version, created_at, log_path) "
             "VALUES (?,?,?,?,?,?,?,?,?)",
-            (build_id, project_id, "queued", "debug", app["id"], app["name"], app["version"], _now(), "build.log"))
-        self._log(build_id, f"[apppanrom] build {build_id} queued for {app['id']} {app['version']}")
-        self.pool.submit(self._run, build_id, project_id, ir)
+            (build_id, project_id, "queued", kind, app["id"], app["name"], app["version"], _now(), "build.log"))
+        self._log(build_id, f"[apppanrom] build {build_id} ({kind}) queued for {app['id']} {app['version']}")
+        self.pool.submit(self._run, build_id, project_id, ir, kind, icon)
         return self.get(build_id)
 
     def _finish(self, build_id: str, started: float, status: str, **fields) -> None:
@@ -159,7 +200,7 @@ class BuildManager:
         self._log(build_id, f"[apppanrom] BUILD FAILED ({reason}): {message}")
         self._finish(build_id, started, "failed", failure_reason=reason, message=message, exit_code=exit_code)
 
-    def _run(self, build_id: str, project_id: str, ir: dict) -> None:
+    def _run(self, build_id: str, project_id: str, ir: dict, kind: str, icon: Path | None) -> None:
         started = time.monotonic()
         work = self.s.builds_dir / build_id / "work"
         try:
@@ -170,25 +211,35 @@ class BuildManager:
                 self._log(build_id, text)
                 self._fail(build_id, started, "prerequisites_missing", "Android build prerequisites are missing; see the log.")
                 return
+            task, rel_out, suffix, is_release = KINDS[kind]
+            if is_release:
+                sign = check_signing(self.s)
+                if not sign["configured"]:
+                    self._log(build_id, f"{sign['detail']}\n  fix: {sign['fix']}")
+                    self._fail(build_id, started, "signing_not_configured", "Release signing is not configured; see the log. No unsigned release is ever produced.")
+                    return
             self._log(build_id, "[apppanrom] prerequisites OK; generating Android project")
             try:
-                generate_project(ir, work)
+                generate_project(ir, work, icon)
             except GenerateError as e:
                 self._fail(build_id, started, "invalid_project", str(e))
                 return
-            code, timed_out = self._gradle(build_id, work)
+            code, timed_out = self._gradle(build_id, work, task, is_release)
             if timed_out:
                 self._fail(build_id, started, "timeout", f"Build exceeded the {self.s.build_timeout_s}s time limit and was stopped.", code)
                 return
             if code != 0:
                 self._fail(build_id, started, "gradle_failed", f"Gradle exited with code {code}; see the log.", code)
                 return
-            apk = work / APK_REL
-            problem = verify_apk(apk)
+            out = work / rel_out
+            problem = verify_aab(out) if kind == "release_aab" else verify_apk(out)
+            signing = SIGNING_LABEL.get(kind, "")
+            if not problem and is_release:
+                problem, signing = self._verify_release_signature(build_id, out, kind)
             if problem:
                 self._fail(build_id, started, "artifact_invalid", problem, code)
                 return
-            self._store_artifact(build_id, project_id, apk, ir, started, code)
+            self._store_artifact(build_id, project_id, out, ir, started, code, suffix, signing)
         except Exception as e:  # never leave a build stuck in "running"
             self._fail(build_id, started, "internal_error", f"Unexpected error: {type(e).__name__}")
             self._log(build_id, f"[apppanrom] internal error: {e!r}")
@@ -196,29 +247,61 @@ class BuildManager:
             if not self.s.keep_build_dirs:
                 shutil.rmtree(work, ignore_errors=True)
 
-    def _store_artifact(self, build_id, project_id, apk: Path, ir: dict, started: float, code: int) -> None:
+    def _verify_release_signature(self, build_id: str, path: Path, kind: str) -> tuple[str | None, str]:
+        """Independently checks the signature of a release artifact. Returns (problem, human-readable signing status)."""
+        if kind == "release_apk":
+            tool = find_apksigner(self.s)
+            if not tool:
+                self._log(build_id, "[apppanrom] apksigner not found in the SDK build-tools; the signature could not be independently verified")
+                return None, "release key (Gradle signed it; not independently verified: apksigner missing)"
+            rc, out = _run_tool([tool, "verify", "--print-certs", str(path)])
+            self._log(build_id, "[apppanrom] apksigner verify:\n" + out.strip()[:2000])
+            if rc != 0:
+                return "apksigner could not verify the APK signature.", ""
+            if "CN=Android Debug" in out:
+                return "The release APK is signed with the Android debug key, not a release key.", ""
+            return None, "release key (verified with apksigner)"
+        tool = find_jarsigner(self.s)
+        if not tool:
+            self._log(build_id, "[apppanrom] jarsigner not found; the bundle signature could not be independently verified")
+            return None, "release key (Gradle signed it; not independently verified: jarsigner missing)"
+        rc, out = _run_tool([tool, "-verify", "-certs", str(path)])
+        self._log(build_id, "[apppanrom] jarsigner -verify:\n" + out.strip()[:2000])
+        if rc != 0 or "jar verified" not in out:
+            return "jarsigner could not verify the AAB signature (it may be unsigned).", ""
+        if "CN=Android Debug" in out:
+            return "The release bundle is signed with the Android debug key, not a release key.", ""
+        return None, "release key (verified with jarsigner)"
+
+    def _store_artifact(self, build_id, project_id, apk: Path, ir: dict, started: float, code: int, suffix: str, signing: str) -> None:
         safe = re.sub(r"[^A-Za-z0-9._-]+", "-", ir["app"]["name"]).strip("-") or "app"
-        name = f"{safe}-{ir['app']['version']}-debug.apk"
+        name = f"{safe}-{ir['app']['version']}-{suffix}"
         out_dir = self.s.artifacts_dir / build_id
         out_dir.mkdir(parents=True, exist_ok=True)
         dest = out_dir / name
         shutil.copyfile(apk, dest)
         digest = hashlib.sha256(dest.read_bytes()).hexdigest()
-        self._log(build_id, f"[apppanrom] BUILD SUCCEEDED: {name} ({dest.stat().st_size} bytes, sha256 {digest[:16]}...) - debug-signed")
+        self._log(build_id, f"[apppanrom] BUILD SUCCEEDED: {name} ({dest.stat().st_size} bytes, sha256 {digest[:16]}...) - signed with {signing}")
         self._finish(build_id, started, "succeeded", exit_code=code, artifact_name=name, artifact_size=dest.stat().st_size,
-                     artifact_sha256=digest, artifact_path=f"{build_id}/{name}", message="Debug APK built.")
+                     artifact_sha256=digest, artifact_path=f"{build_id}/{name}", signing=signing,
+                     message={"debug.apk": "Debug APK built.", "release.apk": "Release APK built and signed.", "release.aab": "Release app bundle built and signed."}[suffix])
         self.prune_artifacts(project_id)
 
-    def _gradle(self, build_id: str, work: Path) -> tuple[int, bool]:
+    def _gradle(self, build_id: str, work: Path, task: str, release: bool) -> tuple[int, bool]:
         exe = gradle_bin(self.s)
-        cmd = [exe, "--no-daemon", "--console=plain", "-p", str(work), "assembleDebug"]
+        cmd = [exe, "--no-daemon", "--console=plain", "-p", str(work), task]
         env = {k: os.environ[k] for k in PASSTHROUGH_ENV if k in os.environ}
         env["GRADLE_USER_HOME"] = str(self.s.gradle_home)
         env["ANDROID_HOME"] = str(self.s.android_home)
         env["ANDROID_SDK_ROOT"] = str(self.s.android_home)
         if self.s.java_home:
             env["JAVA_HOME"] = str(self.s.java_home)
-        self._log(build_id, "[apppanrom] running: gradle --no-daemon --console=plain assembleDebug")
+        if release:  # secrets go to the Gradle process environment only: never into files, argv or logs
+            env["APPANROM_SIGN_STORE_FILE"] = str(self.s.keystore_path)
+            env["APPANROM_SIGN_STORE_PASSWORD"] = self.s.keystore_password or ""
+            env["APPANROM_SIGN_KEY_ALIAS"] = self.s.key_alias or ""
+            env["APPANROM_SIGN_KEY_PASSWORD"] = self.s.effective_key_password
+        self._log(build_id, f"[apppanrom] running: gradle --no-daemon --console=plain {task}")
         log_path = self.log_path(build_id)
         proc = subprocess.Popen(cmd, cwd=work, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, start_new_session=True)

@@ -13,6 +13,7 @@ class Parser:
         self.toks = tokens
         self.p = 0
         self.depth = 0
+        self.last_line = 1  # line of the last real token consumed (used for statement end lines)
 
     # ---- helpers -------------------------------------------------------
     @property
@@ -22,6 +23,8 @@ class Parser:
     def advance(self) -> Token:
         t = self.toks[self.p]
         self.p += 1
+        if t.kind not in ("NEWLINE", "INDENT", "DEDENT", "EOF"):
+            self.last_line = t.line
         return t
 
     def is_op(self, value: str) -> bool:
@@ -99,7 +102,10 @@ class Parser:
         if self.depth > MAX_DEPTH:
             self.err("Code is nested too deeply.", code="too_deep")
         try:
-            return self._statement()
+            node = self._statement()
+            node["end"] = self.last_line  # inclusive last source line of the statement (used by the designer)
+            node.setdefault("hend", node["end"])  # last line of the header (call + optional ':')
+            return node
         finally:
             self.depth -= 1
 
@@ -115,6 +121,10 @@ class Parser:
                 e = self.expr()
                 self.end_of_statement()
                 return {"t": "let", "n": name.value, "e": e, "pos": pos}
+            if kw == "summa":
+                self.advance()
+                self.end_of_statement()
+                return {"t": "summa", "pos": pos}
             if kw == "function":
                 return self.function_def()
             if kw == "return":
@@ -166,8 +176,10 @@ class Parser:
         if self.is_op(":"):
             if e["t"] != "call":
                 self.err("Only component calls can be followed by ':' and a block.")
+            hend = self.last_line
             self.advance()
             e["children"] = self.block()
+            e["hend"] = hend
             e["t"] = "block_call"
             e["pos"] = pos
             return e

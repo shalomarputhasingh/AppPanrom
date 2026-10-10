@@ -9,11 +9,13 @@ from pathlib import Path
 
 from .config import Settings
 from .db import Database
+from .android.icon import IconError, validate_png_icon
 from .lang import validate_app_id, validate_version
 
 PROJECT_ID_RE = re.compile(r"^p_[0-9a-f]{12}$")
 FILE_NAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_\-]{0,63}\.(apn|md|txt)$")
 MAIN_FILE = "main.apn"
+ICON_FILE = "icon.png"
 THEMES = ("light", "dark")
 
 STARTER = '''# Welcome to AppPanrom! Edit this file, then press Run.
@@ -105,6 +107,7 @@ class ProjectStore:
         return {
             "id": row["id"], "name": row["name"], "app_id": row["app_id"], "version": row["version"],
             "theme": row["theme"], "created_at": row["created_at"], "updated_at": row["updated_at"], "files": files,
+            "has_icon": (d / ICON_FILE).is_file(),
         }
 
     def create(self, name: str, app_id: str | None = None, version: str = "1.0.0", theme: str = "light",
@@ -181,3 +184,27 @@ class ProjectStore:
 
     def compile_defaults(self, project: dict) -> dict:
         return {"name": project["name"], "app_id": project["app_id"], "version": project["version"], "theme": project["theme"]}
+
+    # ---- app icon (a PNG asset; not part of the editable file list)
+    def icon_path(self, project_id: str) -> Path | None:
+        self.get(project_id)
+        p = self._dir(project_id) / ICON_FILE
+        return p if p.is_file() else None
+
+    def set_icon(self, project_id: str, data: bytes) -> dict:
+        self.get(project_id)
+        try:
+            w, h = validate_png_icon(data)
+        except IconError as e:
+            raise Invalid(str(e), "bad_icon") from None
+        p = self._dir(project_id) / ICON_FILE
+        tmp = p.with_suffix(".tmp")
+        tmp.write_bytes(data)
+        tmp.replace(p)
+        self.db.execute("UPDATE projects SET updated_at=? WHERE id=?", (now(), project_id))
+        return {"width": w, "height": h, "size": len(data)}
+
+    def delete_icon(self, project_id: str) -> None:
+        p = self.icon_path(project_id)
+        if p:
+            p.unlink()

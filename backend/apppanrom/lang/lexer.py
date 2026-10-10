@@ -7,7 +7,7 @@ from .diagnostics import SyntaxProblem
 
 KEYWORDS = {
     "mari", "function", "return", "enna_na", "illana_enna", "illana",
-    "ovvoru", "in", "irukkura_varai", "try", "catch", "and", "or", "not",
+    "ovvoru", "in", "irukkura_varai", "try", "catch", "and", "or", "not", "summa",
     "true", "false", "null",
 }
 

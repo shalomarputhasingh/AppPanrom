@@ -174,10 +174,28 @@ def test_generated_project_contents(tmp_path):
     assert (www / "apppanrom-runtime.js").is_file() and "__APPANROM_IR__" in (www / "app.js").read_text()
 
 
-def test_internet_permission_only_when_images_used(tmp_path):
-    ir = {**IR, "screens": {"home": {"body": [{"t": "comp", "c": "image_kaattu"}]}}}
-    generate_project(ir, tmp_path / "p")
-    assert "android.permission.INTERNET" in (tmp_path / "p/app/src/main/AndroidManifest.xml").read_text()
+def test_permissions_are_declared_only_for_features_used(tmp_path):
+    from apppanrom.lang import compile_source
+
+    plain = compile_source('screen_uruvakku("h"):\n    title("x")\n')
+    assert plain.ir["permissions"] == []
+    generate_project(plain.ir, tmp_path / "a")
+    assert "uses-permission" not in (tmp_path / "a/app/src/main/AndroidManifest.xml").read_text()
+    src = 'function f():\n    vibrate_pannu(50)\nscreen_uruvakku("h"):\n    image_kaattu("https://x.com/a.png")\n    button("b", click_pannumbodhu=f)\n'
+    r = compile_source(src)
+    assert [p["permission"] for p in r.ir["permissions"]] == ["android.permission.INTERNET", "android.permission.VIBRATE"]
+    assert r.ir["permissions"][1]["used_by"] == ["vibrate_pannu"]
+    generate_project(r.ir, tmp_path / "b")
+    manifest = (tmp_path / "b/app/src/main/AndroidManifest.xml").read_text()
+    assert "android.permission.INTERNET" in manifest and "android.permission.VIBRATE" in manifest
+
+
+def test_generator_rejects_bad_permission_names(tmp_path):
+    try:
+        generate_project({**IR, "permissions": [{"permission": 'x"/><evil', "reason": "", "used_by": []}]}, tmp_path / "bad")
+        raise AssertionError("should have failed")
+    except GenerateError:
+        pass
 
 
 def test_generator_rejects_unsafe_identifiers(tmp_path):

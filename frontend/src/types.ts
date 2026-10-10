@@ -7,6 +7,7 @@ export interface Project {
   created_at: string;
   updated_at: string;
   files: string[];
+  has_icon: boolean;
 }
 
 export interface Diagnostic {
@@ -37,6 +38,15 @@ export interface PrereqCheck {
 export interface SystemStatus {
   version: string;
   android: { ok: boolean; checks: PrereqCheck[]; supported_output: string };
+  signing: { configured: boolean; detail: string; fix: string };
+}
+
+export type BuildKind = 'debug_apk' | 'release_apk' | 'release_aab';
+
+export interface AppPermission {
+  permission: string;
+  reason: string;
+  used_by: string[];
 }
 
 export interface Build {
@@ -73,3 +83,49 @@ export interface Spec {
   style_groups: Record<string, string[]>;
   not_implemented: string[];
 }
+
+export interface DesignTreeNode {
+  c: string;
+  line: number;
+  label: string;
+  children: DesignTreeNode[] | null;
+}
+
+export interface DesignTree {
+  screen: string;
+  screens: string[];
+  title: string;
+  children: DesignTreeNode[];
+}
+
+export interface DesignValue {
+  expr: string;
+  literal?: { type: 'str' | 'num' | 'bool'; value: string | number | boolean };
+}
+
+export interface DesignNodeInfo {
+  kind: 'component' | 'screen';
+  component: string;
+  line: number;
+  container: boolean;
+  name?: string;
+  props: Record<string, DesignValue>;
+  events: Record<string, string>;
+  style: Record<string, DesignValue>;
+  style_dynamic: boolean;
+  allowed: { props: { name: string; type: string; required: boolean }[]; events: string[]; style: string[] };
+  handlers: string[];
+  handler_lines: Record<string, number>;
+}
+
+export interface DropInfo {
+  source: 'new' | 'move';
+  type?: string;
+  line?: number;
+  target_line: number | null;
+  position: 'before' | 'after' | 'inside';
+  screen: string;
+}
+
+/** A value sent to the designer: a literal (typed control) or an expression (code). */
+export type DesignInput = { literal: string | number | boolean } | { expr: string } | null;

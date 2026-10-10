@@ -15,10 +15,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
 from .android.builder import BuildManager
-from .android.prereqs import check_prerequisites
+from typing import Literal
+
+from .android.prereqs import check_prerequisites, check_signing
 from .config import Settings
 from .db import Database
 from .lang import compile_source
+from .lang.designer import DesignError, apply_op, describe
 from .lang.spec import REPO_ROOT, load_spec
 from .projects import MAIN_FILE, Invalid, NotFound, ProjectStore
 
@@ -52,6 +55,20 @@ class ProjectPatch(BaseModel):
 
 class FileBody(BaseModel):
     content: str = Field(max_length=200_000)
+
+
+class DesignEdit(BaseModel):
+    source: str = Field(max_length=200_000)
+    op: dict
+
+
+class DesignNode(BaseModel):
+    source: str = Field(max_length=200_000)
+    line: int = Field(ge=1, le=100_000)
+
+
+class BuildRequest(BaseModel):
+    kind: Literal["debug_apk", "release_apk", "release_aab"] = "debug_apk"
 
 
 class SourceBody(BaseModel):
@@ -97,6 +114,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def _invalid(_, e: Invalid):
         return error_response(422, e.code, str(e))
 
+    @app.exception_handler(DesignError)
+    async def _design(_, e: DesignError):
+        return error_response(422, e.code, str(e))
+
     @app.exception_handler(RequestValidationError)
     async def _validation(_, e: RequestValidationError):
         details = [{"field": ".".join(str(x) for x in err["loc"][1:]), "message": err["msg"]} for err in e.errors()]
@@ -117,7 +138,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/system/status")
     def system_status():
-        return {"version": __version__, "android": check_prerequisites(s),
+        return {"version": __version__, "android": check_prerequisites(s), "signing": check_signing(s),
                 "limits": {"max_file_bytes": s.max_file_bytes, "max_files_per_project": s.max_files_per_project,
                            "build_timeout_s": s.build_timeout_s}}
 
@@ -145,6 +166,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.delete("/api/projects/{project_id}", status_code=204)
     def delete_project(project_id: str):
         store.delete(project_id, builds.delete_project_builds)
+
+    # ---- app icon (PNG 192-1024 px square, max 512 KB)
+    @app.put("/api/projects/{project_id}/icon")
+    async def put_icon(project_id: str, request: Request):
+        if "image/png" not in request.headers.get("content-type", ""):
+            raise ApiError(415, "bad_icon", "Send the icon as a PNG (Content-Type: image/png).")
+        return store.set_icon(project_id, await request.body())
+
+    @app.get("/api/projects/{project_id}/icon")
+    def get_icon(project_id: str):
+        p = store.icon_path(project_id)
+        if not p:
+            raise NotFound("icon")
+        return FileResponse(p, media_type="image/png", headers={"Cache-Control": "no-cache"})
+
+    @app.delete("/api/projects/{project_id}/icon", status_code=204)
+    def delete_icon(project_id: str):
+        store.delete_icon(project_id)
 
     # ---- files
     @app.get("/api/projects/{project_id}/files")
@@ -181,14 +220,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         r = compile_project(project_id, body.source if body else None)
         return r.to_dict()
 
+    # ---- visual designer: stateless text edits of the editor buffer (the source file stays the single source of truth)
+    @app.post("/api/projects/{project_id}/design/edit")
+    def design_edit(project_id: str, body: DesignEdit):
+        store.get(project_id)
+        return apply_op(body.source, body.op)
+
+    @app.post("/api/projects/{project_id}/design/node")
+    def design_node(project_id: str, body: DesignNode):
+        store.get(project_id)
+        return describe(body.source, body.line)
+
     # ---- builds
     @app.post("/api/projects/{project_id}/builds", status_code=202)
-    def start_build(project_id: str):
+    def start_build(project_id: str, body: BuildRequest | None = None):
         r = compile_project(project_id, None)
         if not r.ok:
             raise ApiError(422, "source_invalid", "Fix the errors in your code before building.",
                            [d.to_dict() for d in r.diagnostics if d.severity == "error"])
-        return builds.submit(project_id, r.ir)
+        return builds.submit(project_id, r.ir, body.kind if body else "debug_apk", store.icon_path(project_id))
 
     @app.get("/api/projects/{project_id}/builds")
     def project_builds(project_id: str):
@@ -220,7 +270,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                            "This build has no downloadable APK." if b["status"] != "succeeded"
                            else "The APK for this build is no longer available (old artifacts are pruned).")
         build, path = found
-        return FileResponse(path, media_type="application/vnd.android.package-archive", filename=build["artifact"]["name"])
+        media = "application/octet-stream" if path.suffix == ".aab" else "application/vnd.android.package-archive"
+        return FileResponse(path, media_type=media, filename=build["artifact"]["name"])
 
     # ---- optional: serve the built Studio (npm run build) from the same origin
     dist = REPO_ROOT / "frontend" / "dist"

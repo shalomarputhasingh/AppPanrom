@@ -1,7 +1,8 @@
 // End-to-end test: real backend (serving the built Studio) + real Chromium. Run `npm run build` first.
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
-import { readFileSync } from 'node:fs';
+import zlib from 'node:zlib';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { existsSync, mkdtempSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -33,8 +34,9 @@ const server = spawn('python3', ['-m', 'uvicorn', 'apppanrom.main:create_app', '
 });
 
 let failed = 0;
+let curPage;
 const step = async (name, fn) => {
-  try { await fn(); console.log(`  ok   ${name}`); } catch (e) { failed++; console.log(`  FAIL ${name}\n       ${String(e.message).split('\n')[0]}`); throw e; }
+  try { await fn(); console.log(`  ok   ${name}`); } catch (e) { failed++; if (shots && curPage) await curPage.screenshot({ path: path.join(shots, 'FAIL.png') }).catch(() => undefined); console.log(`  FAIL ${name}\n       ${String(e.message).split('\n')[0]}`); throw e; }
 };
 const shot = async (page, n) => { if (shots) await page.screenshot({ path: path.join(shots, n + '.png') }); };
 
@@ -57,6 +59,7 @@ try {
   await waitHealthy();
   browser = await chromium.launch({ executablePath: findChromium(), args: ['--no-sandbox'] });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  curPage = page;
   const pageErrors = [];
   page.on('pageerror', (e) => pageErrors.push(e.message));
   await page.goto(base);
@@ -176,6 +179,174 @@ screen_uruvakku("two"):
     await page.getByRole('button', { name: 'Delete' }).click();
     await page.getByRole('button', { name: 'Delete project' }).click();
     await page.getByText('No projects yet').waitFor();
+  });
+  await step('visual designer: drag, inspect, move, delete, new handler, new screen - code updates live', async () => {
+    const code = () => page.locator('.cm-content').innerText();
+    const waitCode = async (re, timeout = 8000) => {
+      const end = Date.now() + timeout;
+      let last = '';
+      while (Date.now() < end) { last = await code(); if (re.test(last)) return last; await page.waitForTimeout(100); }
+      throw new Error('code never matched ' + re + '\n--- code ---\n' + last);
+    };
+    await page.getByLabel('New project name').fill('Designer App');
+    await page.getByRole('button', { name: 'Create project' }).click();
+    await page.getByTestId('editor').waitFor();
+    await page.getByTestId('mode-design').click();
+    const canvas = page.getByTestId('design-canvas');
+    await canvas.getByText('Vanakkam Nanba!').waitFor();
+    await shot(page, '07-designer');
+
+    // 1. drag a Button from the palette onto the empty part of the screen -> code gains a button
+    await page.getByTestId('palette-button').dragTo(canvas.locator('.ap-screen'), { targetPosition: { x: 150, y: 480 } });
+    await waitCode(/button\("Button"\)\s*$/m);
+    await canvas.getByRole('button', { name: 'Button', exact: true }).waitFor();
+
+    // 2. select it on the canvas -> inspector; edit the text -> canvas and code change
+    await canvas.locator('.ap-btn', { hasText: 'Button' }).last().click();
+    await page.getByTestId('inspector').waitFor();
+    if (!(await page.getByTestId('inspector-title').innerText()).includes('button')) throw new Error('inspector shows wrong component');
+    const label = page.getByTestId('inspector').getByLabel('Label', { exact: true });
+    await label.fill('Save');
+    await label.press('Enter');
+    await waitCode(/button\("Save"\)/);
+    await canvas.locator('.ap-btn', { hasText: 'Save' }).waitFor();
+
+    // 3. style via the inspector (hex field) -> code + canvas colour
+    const bg = page.getByTestId('inspector').getByLabel('Background', { exact: true });
+    await bg.fill('#16A34A');
+    await bg.press('Enter');
+    await waitCode(/button\("Save", style=\{"background": "#16A34A"\}\)/);
+    const col = await canvas.locator('.ap-btn', { hasText: 'Save' }).evaluate((el) => getComputedStyle(el).backgroundColor);
+    if (col !== 'rgb(22, 163, 74)') throw new Error('canvas colour not updated: ' + col);
+    // invalid values are rejected and never written
+    const fs = page.getByTestId('inspector').getByLabel('Corner radius', { exact: true });
+    await fs.fill('9999');
+    await fs.press('Enter');
+    await page.getByTestId('inspector').getByRole('alert').filter({ hasText: /Invalid value for style/ }).waitFor();
+    if (/9999/.test(await code())) throw new Error('invalid value was written to the code');
+
+    // 4. new handler wired to the button; code shows the function
+    const onClick = page.getByTestId('inspector').getByLabel('On click', { exact: true });
+    await onClick.selectOption({ label: '＋ New handler…' });
+    await page.getByLabel('New handler name').fill('save_it');
+    await page.getByRole('button', { name: 'Create' }).click();
+    await waitCode(/function save_it\(\):/);
+    await waitCode(/button\("Save", click_pannumbodhu=save_it, style=/);
+
+    // 5. drag the Save button above the title: reorder written to code
+    await canvas.locator('.ap-btn', { hasText: 'Save' }).dragTo(canvas.locator('.ap-title'), { targetPosition: { x: 40, y: 3 } });
+    await page.waitForFunction(() => {
+      const t = document.querySelector('.cm-content').innerText;
+      return t.indexOf('button("Save"') > 0 && t.indexOf('button("Save"') < t.indexOf('title("Vanakkam Nanba!"');
+    });
+
+    // 6. drop a Row container, then a Text into it (empty container accepts drops, summa placeholder is replaced)
+    await page.getByTestId('palette-row_uruvakku').dragTo(canvas.locator('.ap-screen'), { targetPosition: { x: 150, y: 520 } });
+    await waitCode(/row_uruvakku\(style=\{"gap": 8\}\):\s*\n\s*summa/);
+    await canvas.locator('.ap-empty').waitFor();
+    await page.getByTestId('palette-text_kaattu').dragTo(canvas.locator('.ap-empty'));
+    const c2 = await waitCode(/row_uruvakku\(style=\{"gap": 8\}\):\s*\n\s*text_kaattu\("Text"\)/);
+    if (/summa/.test(c2)) throw new Error('summa placeholder was not replaced');
+
+    // 7. code -> canvas: typing in the editor updates the design without pressing Run
+    await page.locator('.cm-content').click();
+    await page.keyboard.press('Control+End');
+    await page.keyboard.insertText('\n    text_kaattu("Typed in code")\n');
+    await canvas.getByText('Typed in code').waitFor();
+
+    // 8. keyboard delete of the selected canvas element
+    await canvas.getByText('Typed in code').click();
+    await page.getByTestId('inspector-title').filter({ hasText: 'text_kaattu' }).waitFor();
+    await page.locator('body').click({ position: { x: 5, y: 5 } });
+    await canvas.getByText('Typed in code').click();
+    await page.keyboard.press('Delete');
+    await canvas.getByText('Typed in code').waitFor({ state: 'detached' });
+    if (/Typed in code/.test(await code())) throw new Error('delete did not update code');
+
+    // 9. outline selects, add screen, switch screen
+    await page.getByTestId('toolbar-delete').waitFor();
+    await page.getByRole('button', { name: '+ Screen' }).click();
+    await page.getByLabel('New screen name').fill('details');
+    await page.getByRole('button', { name: 'Add', exact: true }).last().click();
+    await waitCode(/screen_uruvakku\("details"\):/);
+    await page.getByTestId('screen-pick').waitFor();
+    await page.waitForFunction(() => document.querySelector('[data-testid=screen-pick]').value === 'details');
+    await canvas.locator('.ap-empty').waitFor();
+    await shot(page, '08-designer-after');
+
+    // 10. errors in code freeze the designer with a clear message, and recover when fixed
+    await page.locator('.cm-content').click();
+    await page.keyboard.press('Control+End');
+    await page.keyboard.insertText('\n    titel("oops")\n');
+    await page.getByTestId('design-stale').waitFor();
+    await page.getByTestId('palette-title').dragTo(canvas.locator('.ap-screen')).catch(() => undefined);
+    if (/Title"\)\s*\n\s*titel/.test(await code())) throw new Error('designer edited stale code');
+    await page.keyboard.press('Control+Z');
+    await page.getByTestId('design-stale').waitFor({ state: 'detached' });
+
+    // 11. the designed app really runs in the preview
+    await page.getByTestId('mode-run').click();
+    await page.getByTestId('run-btn').click();
+    const frame = page.frameLocator('[data-testid=preview-frame]');
+    await frame.getByRole('button', { name: 'Save' }).waitFor();
+    await frame.getByRole('button', { name: 'Save' }).click();
+    await frame.getByText('save_it was called').waitFor();
+  });
+  await step('settings: app icon upload/validation/remove; build tab: release disabled without a key, permissions listed', async () => {
+    const crc = (buf) => { let c, crcv = 0xffffffff; for (const b of buf) { c = (crcv ^ b) & 0xff; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; crcv = (crcv >>> 8) ^ c; } return (crcv ^ 0xffffffff) >>> 0; };
+    const chunk = (t, d) => { const len = Buffer.alloc(4); len.writeUInt32BE(d.length); const td = Buffer.concat([Buffer.from(t), d]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([len, td, c]); };
+    const makePng = (n) => {
+      const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(n, 0); ihdr.writeUInt32BE(n, 4); ihdr[8] = 8; ihdr[9] = 6;
+      const row = Buffer.concat([Buffer.from([0]), Buffer.alloc(n * 4, 0x80)]);
+      return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(Buffer.concat(Array(n).fill(row)))), chunk('IEND', Buffer.alloc(0))]);
+    };
+    await page.getByRole('tab', { name: 'Settings' }).click();
+    const up = page.getByLabel('Upload app icon (PNG)');
+    await up.setInputFiles({ name: 'small.png', mimeType: 'image/png', buffer: makePng(64) });
+    await page.getByText(/Icon must be between 192x192/).waitFor();
+    await up.setInputFiles({ name: 'ok.png', mimeType: 'image/png', buffer: makePng(256) });
+    await page.getByText('Icon updated.').waitFor();
+    await page.getByAltText('App icon preview').waitFor();
+    await page.getByRole('button', { name: 'Remove', exact: true }).click();
+    await page.getByText(/default Android icon will be used/).waitFor();
+    await page.getByTestId('goto-build').click();
+    await page.getByTestId('permissions').getByText(/none/).waitFor();
+    if (!(await page.getByTestId('kind-release_aab').isDisabled())) throw new Error('release AAB selectable without a signing key');
+    if (!(await page.getByTestId('kind-release_apk').isDisabled())) throw new Error('release APK selectable without a signing key');
+    await page.getByText('Release signing is not set up').waitFor();
+    await page.getByTestId('build-btn').getByText('Build Debug APK').waitFor();
+  });
+  await step('device features + permissions in the generated Android bundle (vibrate, clipboard)', async () => {
+    const src = path.join(data, 'device.apn');
+    writeFileSync(src, `function buzz():
+    vibrate_pannu(120)
+    clipboard_copy("hello " + "clip")
+screen_uruvakku("home"):
+    button("Buzz", click_pannumbodhu=buzz)
+`);
+    const out = path.join(data, 'android-device');
+    const r = spawnSync('python3', ['-m', 'apppanrom.cli', 'android-project', src, out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
+    if (r.status !== 0) throw new Error('generate failed: ' + r.stderr);
+    const manifest = readFileSync(path.join(out, 'app/src/main/AndroidManifest.xml'), 'utf8');
+    if (!manifest.includes('android.permission.VIBRATE') || manifest.includes('INTERNET')) throw new Error('wrong permissions in manifest:\n' + manifest);
+    const www = path.join(out, 'app/src/main/assets/www');
+    const srv = createServer((req, res) => {
+      if (req.url === '/favicon.ico') { res.statusCode = 204; res.end(); return; }
+      const f = path.join(www, req.url.split('?')[0].replace(/^\/assets\/www\//, ''));
+      try { res.setHeader('content-type', f.endsWith('.js') ? 'text/javascript' : 'text/html'); res.end(readFileSync(f)); } catch { res.statusCode = 404; res.end(); }
+    }).listen(8798);
+    try {
+      const p3 = await browser.newPage();
+      await p3.addInitScript(() => {
+        window.__calls = [];
+        Object.defineProperty(navigator, 'vibrate', { value: (ms) => { window.__calls.push(['vibrate', ms]); return true; }, configurable: true });
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText: (t) => { window.__calls.push(['copy', t]); return Promise.resolve(); } }, configurable: true });
+      });
+      await p3.goto('http://127.0.0.1:8798/assets/www/index.html');
+      await p3.getByRole('button', { name: 'Buzz' }).click();
+      const calls = await p3.evaluate('window.__calls');
+      if (JSON.stringify(calls) !== JSON.stringify([['vibrate', 120], ['copy', 'hello clip']])) throw new Error('unexpected device calls: ' + JSON.stringify(calls));
+    } finally { srv.close(); }
   });
   await step('generated Android web bundle runs in Chromium (same CSP as the APK) incl. back handling', async () => {
     const out = path.join(data, 'android-project');

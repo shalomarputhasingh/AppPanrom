@@ -194,6 +194,23 @@
     } catch (e) { return memoryStorage(); }
   }
 
+  /** Browser/WebView implementations of device features. Both degrade to a console warning where unsupported. */
+  function defaultDevice(log) {
+    return {
+      clipboard: function (text) {
+        var nav = typeof navigator !== 'undefined' ? navigator : null;
+        if (nav && nav.clipboard && nav.clipboard.writeText) {
+          nav.clipboard.writeText(text).catch(function () { log('warning', 'clipboard_copy: the clipboard is not available here (permission denied or blocked by the preview).'); });
+        } else log('warning', 'clipboard_copy: the clipboard is not available in this environment.');
+      },
+      vibrate: function (ms) {
+        var nav = typeof navigator !== 'undefined' ? navigator : null;
+        if (nav && typeof nav.vibrate === 'function') nav.vibrate(ms);
+        else log('warning', 'vibrate_pannu: vibration is not supported in this environment (the Android app vibrates).');
+      },
+    };
+  }
+
   // ------------------------------------------------------------------ runtime
   function createRuntime(ir, host) {
     host = host || {};
@@ -407,6 +424,18 @@
     def('data_delete_pannu', function (a) { storage.removeItem(skey(a[0])); return null; }, true);
     def('data_clear_pannu', function () { ownKeys().forEach(function (k) { storage.removeItem(k); }); return null; }, true);
 
+    var device = host.device || defaultDevice(log);
+    def('clipboard_copy', function (a) {
+      var t = toText(a[0]);
+      if (t.length > LIMITS.storageValue) throw new ApError('clipboard_copy: text is too long.');
+      device.clipboard(t); return null;
+    }, true);
+    def('vibrate_pannu', function (a) {
+      need('vibrate_pannu', 0, a[0], 'num');
+      if (!Number.isInteger(a[0]) || a[0] < 1 || a[0] > 5000) throw new ApError('vibrate_pannu needs whole milliseconds from 1 to 5000.');
+      device.vibrate(a[0]); return null;
+    }, true);
+
     def('screen_ku_poo', function (a) {
       need('screen_ku_poo', 0, a[0], 'str');
       if (!ir.screens[a[0]]) throw new ApError("Screen '" + a[0] + "' does not exist.");
@@ -581,6 +610,7 @@
             return execBlock(st.handler, env, frame);
           }
         }
+        case 'summa': return null;
         case 'call_stmt': evalCall(st, env); return null;
         case 'screen_title': if (frame) frame.title = toText(evalExpr(st.e, env)); return null;
         case 'comp': if (!frame) throw new ApError('UI components can only be drawn inside a screen.', st.pos); frame.kids.push(buildComponent(st, env)); return null;
@@ -668,6 +698,11 @@
     rt.format = formatError;
     rt.currentScreen = function () { return stack[stack.length - 1]; };
     rt.canGoBack = function () { return stack.length > 1; };
+    /** Design/preview tooling: show a specific screen (resets navigation history). */
+    rt.setScreen = function (name) {
+      if (!ir.screens[name]) return false;
+      stack = [name]; notify(); return true;
+    };
     rt.globals = globals;
 
     rt.init = function () {
@@ -753,6 +788,14 @@
     '.ap-error{margin:16px;padding:16px;border:1px solid #dc2626;border-radius:8px;background:rgba(220,38,38,.08);color:#b91c1c;white-space:pre-wrap;font-size:14px}',
     '.ap-overlay{position:absolute;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:24px;z-index:10}',
     '.ap-dialog{background:var(--surface);color:var(--fg);border-radius:14px;padding:20px;max-width:100%;width:100%;display:flex;flex-direction:column;gap:16px;overflow-wrap:anywhere}',
+    '.ap-root[data-design] [data-ap-line]{cursor:grab}',
+    '.ap-root[data-design] input,.ap-root[data-design] select,.ap-root[data-design] label{pointer-events:none}',
+    '.ap-root[data-design] [data-ap-line]:hover{outline:1px dashed #2563eb;outline-offset:-1px}',
+    '.ap-root[data-design] .ap-selected{outline:2px solid #2563eb!important;outline-offset:-2px}',
+    '.ap-empty{min-height:56px;border:1.5px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center}',
+    '.ap-empty::after{content:"Drop components here";color:var(--muted);font-size:12px}',
+    '.ap-drop-inside{outline:2px dashed #2563eb!important;outline-offset:-2px;background-image:linear-gradient(rgba(37,99,235,.08),rgba(37,99,235,.08))}',
+    '.ap-drop-ind{position:absolute;background:#2563eb;pointer-events:none;z-index:20;border-radius:2px;display:none}',
     '.ap-toast{position:absolute;left:16px;right:16px;bottom:24px;background:#111827;color:#fff;padding:10px 14px;border-radius:10px;z-index:11;font-size:14px;text-align:center;overflow-wrap:anywhere}',
   ].join('\n');
 
@@ -794,6 +837,11 @@
     var uid = 0;
     var rt = null;
     var composing = false;
+    // Design mode (Studio designer): components are selectable/draggable, events do not run, and drops are reported.
+    var design = host.design || null;
+    var selectedLine = design && design.selectedLine ? design.selectedLine : null;
+    var dragEl = null;
+    var CONTAINERS = { card_uruvakku: 1, column_uruvakku: 1, row_uruvakku: 1, center_ama: 1 };
 
     var styleEl = doc.createElement('style');
     styleEl.textContent = CSS;
@@ -801,7 +849,11 @@
     var app = doc.createElement('div');
     app.className = 'ap-root';
     app.setAttribute('data-theme', ir.app.theme === 'dark' ? 'dark' : 'light');
+    if (design) app.setAttribute('data-design', '1');
     rootEl.appendChild(app);
+    var indicator = el0('div', 'ap-drop-ind');
+    app.appendChild(indicator);
+    function el0(tag, cls) { var e = doc.createElement(tag); e.className = cls; return e; }
 
     function el(tag, cls, text) {
       var e = doc.createElement(tag);
@@ -848,9 +900,10 @@
       else if (c === 'button') {
         node = el('button', 'ap-btn', p.label);
         node.type = 'button';
-        node.disabled = !p.enabled;
+        node.disabled = !p.enabled && !design; // in design mode a disabled button must still be selectable
+        if (design && !p.enabled) node.style.opacity = '0.5';
         var h = v.events.click_pannumbodhu;
-        if (h) node.addEventListener('click', function () { rt.fire(h); });
+        if (h && !design) node.addEventListener('click', function () { rt.fire(h); });
       } else if (INPUT_KIND[c]) node = buildInput(v);
       else if (c === 'image_kaattu') { node = el('img', 'ap-image'); if (p.src) node.src = p.src; node.alt = p.alt; }
       else if (c === 'list_kaattu') {
@@ -875,6 +928,15 @@
         (v.children || []).forEach(function (k) { node.appendChild(buildView(k)); });
       }
       applyStyle(node, s);
+      if (design) {
+        node.setAttribute('data-ap-line', String(v.pos[0]));
+        node.setAttribute('data-ap-c', c);
+        node.draggable = true;
+        if (CONTAINERS[c]) {
+          node.setAttribute('data-ap-container', '1');
+          if (!(v.children || []).length) node.classList.add('ap-empty');
+        }
+      }
       return node;
     }
 
@@ -882,6 +944,7 @@
       var p = v.props, kind = INPUT_KIND[v.c], id = 'ap-in-' + (++uid), wrap, input;
       var change = v.events.change_aagumbodhu, submit = v.events.submit_pannumbodhu;
       function onValue(val) {
+        if (design) return;
         rt.setInputFromUI(p.name, val);
         if (change) rt.fire(change); else render();
       }
@@ -929,7 +992,8 @@
     }
 
     function render() {
-      var active = doc.activeElement, restore = null;
+      var root = app.getRootNode ? app.getRootNode() : doc;
+      var active = (root && root.activeElement) || doc.activeElement, restore = null;
       if (active && app.contains(active) && active.getAttribute && active.getAttribute('data-ap-input')) {
         restore = { name: active.getAttribute('data-ap-input') };
         try { restore.s = active.selectionStart; restore.e = active.selectionEnd; } catch (e) { /* not selectable */ }
@@ -937,7 +1001,7 @@
       var prevScreen = app.getAttribute('data-screen'), prevScroll = 0;
       var oldMain = app.querySelector('.ap-screen');
       if (oldMain) prevScroll = oldMain.scrollTop;
-      Array.prototype.slice.call(app.children).forEach(function (c) { if (!/ap-overlay|ap-toast/.test(c.className)) c.remove(); });
+      Array.prototype.slice.call(app.children).forEach(function (c) { if (!/ap-overlay|ap-toast|ap-drop-ind/.test(c.className)) c.remove(); });
 
       var view;
       try { view = rt.render(); } catch (e) {
@@ -962,10 +1026,18 @@
       main.setAttribute('role', 'main');
       view.children.forEach(function (k) { main.appendChild(buildView(k)); });
       applyStyle(main, view.style);
+      if (design) {
+        main.setAttribute('data-ap-screen', view.screen);
+        if (!view.children.length) main.classList.add('ap-empty');
+      }
       app.insertBefore(main, app.firstChild);
       app.insertBefore(bar, main);
       app.setAttribute('data-screen', view.screen);
       if (prevScreen === view.screen) main.scrollTop = prevScroll;
+      if (design) {
+        applySelection();
+        if (design.onTree) design.onTree({ screen: view.screen, screens: ir.screen_order, title: view.title, children: outline(view.children) });
+      }
       if (restore) {
         var target = app.querySelector('[data-ap-input="' + restore.name.replace(/["\\]/g, '\\$&') + '"]');
         if (target) {
@@ -974,6 +1046,110 @@
         }
       }
     }
+    function label(v) {
+      var p = v.props || {};
+      return p.text || p.label || p.name || p.src || (p.items && p.items.length + ' items') || '';
+    }
+    function outline(list) {
+      return list.map(function (v) { return { c: v.c, line: v.pos[0], label: String(label(v)).slice(0, 40), children: v.children ? outline(v.children) : null }; });
+    }
+    function applySelection() {
+      Array.prototype.forEach.call(app.querySelectorAll('.ap-selected'), function (e) { e.classList.remove('ap-selected'); });
+      if (selectedLine == null) return;
+      var e = app.querySelector('[data-ap-line="' + selectedLine + '"]');
+      if (e) e.classList.add('ap-selected');
+    }
+    function select(line, silent) {
+      selectedLine = line;
+      applySelection();
+      if (!silent && design && design.onSelect) design.onSelect(line);
+    }
+
+    // ---- design mode: selection + drag and drop
+    function zoneFor(ev) {
+      var t = ev.target && ev.target.closest ? ev.target.closest('[data-ap-line]') : null;
+      if (t && !app.contains(t)) t = null;
+      if (dragEl && t && (t === dragEl || dragEl.contains(t))) return null;
+      if (!t) return { el: null, position: 'inside' };
+      var r = t.getBoundingClientRect(), par = t.parentElement;
+      var row = !!par && /^row/.test(doc.defaultView.getComputedStyle(par).flexDirection);
+      var ratio = row ? (ev.clientX - r.left) / (r.width || 1) : (ev.clientY - r.top) / (r.height || 1);
+      if (t.hasAttribute('data-ap-container')) return { el: t, position: ratio < 0.25 ? 'before' : ratio > 0.75 ? 'after' : 'inside', row: row };
+      return { el: t, position: ratio < 0.5 ? 'before' : 'after', row: row };
+    }
+    function clearZone() {
+      indicator.style.display = 'none';
+      Array.prototype.forEach.call(app.querySelectorAll('.ap-drop-inside'), function (e) { e.classList.remove('ap-drop-inside'); });
+    }
+    function showZone(z) {
+      clearZone();
+      if (!z) return;
+      if (z.position === 'inside') {
+        (z.el || app.querySelector('.ap-screen')).classList.add('ap-drop-inside');
+        return;
+      }
+      var ar = app.getBoundingClientRect(), r = z.el.getBoundingClientRect(), before = z.position === 'before';
+      indicator.style.display = 'block';
+      if (z.row) {
+        indicator.style.left = (before ? r.left : r.right) - ar.left - 1 + 'px';
+        indicator.style.top = r.top - ar.top + 'px';
+        indicator.style.width = '3px';
+        indicator.style.height = r.height + 'px';
+      } else {
+        indicator.style.top = (before ? r.top : r.bottom) - ar.top - 1 + 'px';
+        indicator.style.left = r.left - ar.left + 'px';
+        indicator.style.height = '3px';
+        indicator.style.width = r.width + 'px';
+      }
+    }
+    function hasType(ev, type) {
+      var ts = ev.dataTransfer && ev.dataTransfer.types;
+      return !!ts && Array.prototype.indexOf.call(ts, type) >= 0;
+    }
+    if (design) {
+      app.addEventListener('click', function (ev) {
+        ev.preventDefault(); ev.stopPropagation();
+        var t = ev.target.closest ? ev.target.closest('[data-ap-line]') : null;
+        select(t ? Number(t.getAttribute('data-ap-line')) : null);
+      }, true);
+      app.addEventListener('dragstart', function (ev) {
+        var t = ev.target.closest ? ev.target.closest('[data-ap-line]') : null;
+        if (!t) { ev.preventDefault(); return; }
+        dragEl = t;
+        ev.dataTransfer.effectAllowed = 'move';
+        ev.dataTransfer.setData('application/x-apppanrom-move', t.getAttribute('data-ap-line'));
+        ev.dataTransfer.setData('text/plain', 'apppanrom-move');
+      });
+      app.addEventListener('dragend', function () { dragEl = null; clearZone(); });
+      app.addEventListener('dragover', function (ev) {
+        if (!hasType(ev, 'application/x-apppanrom-new') && !hasType(ev, 'application/x-apppanrom-move')) return;
+        var z = zoneFor(ev);
+        if (!z) { clearZone(); return; }
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = hasType(ev, 'application/x-apppanrom-new') ? 'copy' : 'move';
+        showZone(z);
+      });
+      app.addEventListener('dragleave', function (ev) { if (!ev.relatedTarget || !app.contains(ev.relatedTarget)) clearZone(); });
+      app.addEventListener('drop', function (ev) {
+        var isNew = hasType(ev, 'application/x-apppanrom-new'), isMove = hasType(ev, 'application/x-apppanrom-move');
+        if (!isNew && !isMove) return;
+        ev.preventDefault();
+        var z = zoneFor(ev);
+        clearZone();
+        if (!z) return;
+        var info = {
+          source: isNew ? 'new' : 'move',
+          target_line: z.el ? Number(z.el.getAttribute('data-ap-line')) : null,
+          position: z.position,
+          screen: rt.currentScreen(),
+        };
+        if (isNew) info.type = ev.dataTransfer.getData('application/x-apppanrom-new');
+        else info.line = Number(ev.dataTransfer.getData('application/x-apppanrom-move'));
+        dragEl = null;
+        if (design.onDrop) design.onDrop(info);
+      });
+    }
+
     try { rt.init(); } catch (e) {
       if (!e || !e.isApError) throw e;
       realHost.log('error', 'Startup failed. ' + rt.format(e));
@@ -982,10 +1158,30 @@
       app.appendChild(startBox);
       return { runtime: rt, goBack: function () { return false; }, destroy: function () { rootEl.removeChild(app); rootEl.removeChild(styleEl); } };
     }
+    if (design && design.screen) rt.setScreen(design.screen);
     rt.subscribe(render);
     render();
     return {
+      /** Design mode: swap in a freshly compiled IR in place (keeps the current screen, selection and scroll). */
+      update: function (newIr) {
+        var screen = rt.currentScreen();
+        ir = newIr;
+        app.setAttribute('data-theme', ir.app.theme === 'dark' ? 'dark' : 'light');
+        rt = createRuntime(ir, realHost);
+        try { rt.init(); } catch (e) {
+          if (!e || !e.isApError) throw e;
+          realHost.log('error', 'Startup failed. ' + rt.format(e));
+          return;
+        }
+        if (ir.screens[screen]) rt.setScreen(screen);
+        rt.subscribe(render);
+        render();
+      },
       runtime: rt,
+      select: function (line) { select(line, true); },
+      setScreen: function (name) { return rt.setScreen(name); },
+      currentScreen: function () { return rt.currentScreen(); },
+      scrollTop: function () { var m = app.querySelector('.ap-screen'); return m ? m.scrollTop : 0; },
       goBack: function () { return rt.goBack(); },
       destroy: function () { clearTimeout(toastTimer); if (app.parentNode) app.parentNode.removeChild(app); if (styleEl.parentNode) styleEl.parentNode.removeChild(styleEl); },
     };

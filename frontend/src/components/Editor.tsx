@@ -1,4 +1,4 @@
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, indentWithTab, redo, undo } from '@codemirror/commands';
 import { indentUnit } from '@codemirror/language';
 import { lintGutter, setDiagnostics, type Diagnostic as CmDiagnostic } from '@codemirror/lint';
 import { EditorState } from '@codemirror/state';
@@ -9,6 +9,12 @@ import type { Diagnostic, Spec } from '../types';
 
 export interface EditorHandle {
   jumpTo(line: number, col: number): void;
+  /** Scrolls a line into view without taking focus (used when the designer selects a component). */
+  reveal(line: number): void;
+  /** Replaces the whole document with the smallest possible change, so scroll position and undo history survive. */
+  replaceAll(text: string): void;
+  undo(): void;
+  redo(): void;
 }
 
 interface Props {
@@ -70,6 +76,25 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor({ initialV
   }, [diagnostics, language]);
 
   useImperativeHandle(ref, () => ({
+    reveal(line) {
+      const v = viewRef.current;
+      if (!v) return;
+      const l = v.state.doc.line(Math.min(Math.max(line, 1), v.state.doc.lines));
+      v.dispatch({ effects: EditorView.scrollIntoView(l.from, { y: 'center' }) });
+    },
+    replaceAll(text) {
+      const v = viewRef.current;
+      if (!v) return;
+      const old = v.state.doc.toString();
+      if (old === text) return;
+      let pre = 0;
+      while (pre < old.length && pre < text.length && old[pre] === text[pre]) pre++;
+      let suf = 0;
+      while (suf < old.length - pre && suf < text.length - pre && old[old.length - 1 - suf] === text[text.length - 1 - suf]) suf++;
+      v.dispatch({ changes: { from: pre, to: old.length - suf, insert: text.slice(pre, text.length - suf) } });
+    },
+    undo() { const v = viewRef.current; if (v) undo(v); },
+    redo() { const v = viewRef.current; if (v) redo(v); },
     jumpTo(line, col) {
       const v = viewRef.current;
       if (!v) return;
