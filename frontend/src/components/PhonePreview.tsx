@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
+import { api } from '../api';
 import { buildPreviewDoc } from '../previewDoc';
 import type { LogLine } from '../types';
 import { FitStage } from './FitStage';
@@ -16,6 +17,31 @@ interface Props {
   codeOk: boolean;
   onLog(level: LogLine['level'], text: string): void;
   onRestart(): void;
+}
+
+/** One-shot location through the browser (it shows its own permission prompt). */
+function deviceLocation(): Promise<{ lat?: number; lon?: number; accuracy?: number; denied?: boolean; error?: string }> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve({ error: 'This browser has no location support.' });
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lon: p.coords.longitude, accuracy: p.coords.accuracy }),
+      (e) => resolve(e.code === e.PERMISSION_DENIED ? { denied: true } : { error: 'The location could not be read.' }),
+      { timeout: 20000, maximumAge: 60000 },
+    );
+  });
+}
+
+/** A browser notification for the previewed app; asks permission the first time. */
+async function deviceNotify(title: string, text: string): Promise<{ error?: string }> {
+  try {
+    if (typeof Notification === 'undefined') return { error: 'This browser has no notification support.' };
+    const perm = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
+    if (perm !== 'granted') return { error: 'Notifications are turned off for the Studio in this browser.' };
+    new Notification(title, { body: text });
+    return {};
+  } catch {
+    return { error: 'The browser could not show the notification.' };
+  }
 }
 
 const storeKey = (id: string) => `apppanrom:preview-store:${id}`;
@@ -60,6 +86,19 @@ export function PhonePreview({ zoom, state, ir, runKey, projectId, errorCount, c
       const m = e.data;
       if (e.source !== frame.current?.contentWindow || !m || m.token !== token) return;
       if (m.type === 'ap-log' && typeof m.text === 'string') onLog(m.level === 'info' || m.level === 'warning' || m.level === 'error' ? m.level : 'debug', m.text.slice(0, 2000));
+      if ((m.type === 'ap-http' || m.type === 'ap-location' || m.type === 'ap-notify') && typeof m.id === 'number') {
+        const win = frame.current?.contentWindow;
+        const reply = (res: object) => win?.postMessage({ type: 'ap-reply', token, id: m.id, res }, '*');
+        if (m.type === 'ap-http' && m.req && typeof m.req.url === 'string') {
+          const method = ['GET', 'POST', 'PUT', 'DELETE'].includes(m.req.method) ? m.req.method : 'GET';
+          api.webRequest(method, m.req.url.slice(0, 2048), typeof m.req.body === 'string' ? m.req.body : null)
+            .then(reply, () => reply({ status: 0, text: '', error: 'The Studio could not reach its web-request proxy.' }));
+        } else if (m.type === 'ap-location') {
+          deviceLocation().then(reply);
+        } else if (m.type === 'ap-notify' && m.req) {
+          deviceNotify(String(m.req.title ?? '').slice(0, 100), String(m.req.text ?? '').slice(0, 500)).then(reply);
+        }
+      }
       if (m.type === 'ap-store' && typeof m.key === 'string') {
         const data = loadStore(projectId);
         if (m.op === 'set') data[m.key] = String(m.value);

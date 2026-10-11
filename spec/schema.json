@@ -996,13 +996,64 @@
         "str"
       ],
       "doc": "screen_maathu(name) - switch to a screen without adding back history (tabs)"
+    },
+    "api_get": {
+      "min": 2,
+      "max": 2,
+      "arg_types": [
+        "str",
+        "str"
+      ],
+      "doc": "api_get(url, \"handler\") - fetch an https:// URL in the background. The handler (a function name in quotes, taking 1 parameter) later receives a dictionary: ok, status, data (parsed JSON or null), text, error. Needs the INTERNET permission."
+    },
+    "api_post": {
+      "min": 3,
+      "max": 3,
+      "arg_types": [
+        "str",
+        "any",
+        "str"
+      ],
+      "doc": "api_post(url, body, \"handler\") - send body (JSON) to an https:// URL. The handler (a function name in quotes, taking 1 parameter) later receives a dictionary: ok, status, data (parsed JSON or null), text, error."
+    },
+    "api_put": {
+      "min": 3,
+      "max": 3,
+      "arg_types": [
+        "str",
+        "any",
+        "str"
+      ],
+      "doc": "api_put(url, body, \"handler\") - like api_post but PUT. The handler (a function name in quotes, taking 1 parameter) later receives a dictionary: ok, status, data (parsed JSON or null), text, error."
+    },
+    "api_delete": {
+      "min": 2,
+      "max": 2,
+      "arg_types": [
+        "str",
+        "str"
+      ],
+      "doc": "api_delete(url, \"handler\") - DELETE request. The handler (a function name in quotes, taking 1 parameter) later receives a dictionary: ok, status, data (parsed JSON or null), text, error."
+    },
+    "location_edu": {
+      "min": 1,
+      "max": 1,
+      "arg_types": [
+        "str"
+      ],
+      "doc": "location_edu(\"handler\") - ask for the phone's current location (the user is asked for permission at run time). The handler (a function name in quotes, 1 parameter) receives a dictionary: ok, lat, lon, accuracy (metres), denied (true when the user said no), error."
+    },
+    "notification_kaattu": {
+      "min": 2,
+      "max": 2,
+      "arg_types": [
+        "str",
+        "str"
+      ],
+      "doc": "notification_kaattu(title, text) - show a system notification (Android 13+ asks the user for permission at run time; the Studio preview asks the browser). If it is not allowed the app shows a short message instead."
     }
   },
   "not_implemented": [
-    "api_get",
-    "api_post",
-    "api_put",
-    "api_delete",
     "api_json",
     "dialog_kaattu",
     "app_icon_set",
@@ -1021,11 +1072,40 @@
   "permissions": {
     "image_kaattu": {
       "android": "android.permission.INTERNET",
-      "reason": "image_kaattu loads pictures from the internet"
+      "reason": "loads pictures and talks to web APIs over the internet"
     },
     "vibrate_pannu": {
       "android": "android.permission.VIBRATE",
       "reason": "vibrate_pannu makes the phone vibrate"
+    },
+    "api_get": {
+      "android": "android.permission.INTERNET",
+      "reason": "loads pictures and talks to web APIs over the internet"
+    },
+    "api_post": {
+      "android": "android.permission.INTERNET",
+      "reason": "loads pictures and talks to web APIs over the internet"
+    },
+    "api_put": {
+      "android": "android.permission.INTERNET",
+      "reason": "loads pictures and talks to web APIs over the internet"
+    },
+    "api_delete": {
+      "android": "android.permission.INTERNET",
+      "reason": "loads pictures and talks to web APIs over the internet"
+    },
+    "location_edu": {
+      "android": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ],
+      "reason": "location_edu reads the phone's current location",
+      "runtime": true
+    },
+    "notification_kaattu": {
+      "android": "android.permission.POST_NOTIFICATIONS",
+      "reason": "notification_kaattu shows notifications",
+      "runtime": true
     }
   },
   "tanglish": {
@@ -1087,7 +1167,11 @@
       "json_decode": "json_padi",
       "now_iso": "ippo",
       "random_number": "random_ennai",
-      "random_choice": "random_edu"
+      "random_choice": "random_edu",
+      "api_get": "api_vaangu",
+      "api_post": "api_anuppu",
+      "api_put": "api_maathi_anuppu",
+      "api_delete": "api_alikka"
     }
   }
 }

@@ -52,6 +52,9 @@ def literal_type(node: dict) -> str | None:
     return None
 
 
+API_CALLS = {"api_get": 2, "api_post": 3, "api_put": 3, "api_delete": 2, "location_edu": 1}  # name -> argument count (the last one is the handler)
+
+
 class Compiler:
     _stack: list = []
     _bars_seen: set = set()
@@ -66,6 +69,7 @@ class Compiler:
         self.input_names: set[str] = set()
         self.used_input_names: list[tuple[str, list[int]]] = []
         self.nav_targets: list[tuple[str, list[int]]] = []
+        self.callback_targets: list[tuple[str, list[int], str]] = []  # (function name, pos, api function)
         self.config: dict[str, str] = {}
         self.used_permission_sources: dict[str, set[str]] = {}
 
@@ -87,11 +91,20 @@ class Compiler:
     def _note_use(self, name: str):
         perm = self.spec.get("permissions", {}).get(name)
         if perm:
-            self.used_permission_sources.setdefault(perm["android"], set()).add(name)
+            android = perm["android"]
+            for a in ([android] if isinstance(android, str) else android):
+                self.used_permission_sources.setdefault(a, set()).add(name)
 
     def _permissions(self) -> list[dict]:
-        reasons = {v["android"]: v["reason"] for v in self.spec.get("permissions", {}).values()}
-        return [{"permission": p, "reason": reasons[p], "used_by": sorted(u)} for p, u in sorted(self.used_permission_sources.items())]
+        reasons: dict[str, str] = {}
+        runtime: set[str] = set()
+        for v in self.spec.get("permissions", {}).values():
+            for a in ([v["android"]] if isinstance(v["android"], str) else v["android"]):
+                reasons[a] = v["reason"]
+                if v.get("runtime"):
+                    runtime.add(a)
+        return [{"permission": p, "reason": reasons[p], "used_by": sorted(u), "runtime": p in runtime}
+                for p, u in sorted(self.used_permission_sources.items())]
 
     # ---- top level ---------------------------------------------------------
     def compile(self, source: str) -> CompileResult:
@@ -157,6 +170,13 @@ class Compiler:
             if target not in self.screens:
                 self.error(pos, f"Navigation target screen '{target}' does not exist.", "unknown_screen",
                            self.suggest(target, self.screens))
+        for target, pos, api in self.callback_targets:
+            fn = self.functions.get(target)
+            if fn is None:
+                self.error(pos, f"{api}: handler function '{target}' is not defined.", "undefined_handler", self.suggest(target, self.functions))
+            elif len(fn["params"]) != 1:
+                self.error(pos, f"{api}: handler '{target}' must take exactly 1 parameter (the response), but takes {len(fn['params'])}.", "handler_params",
+                           f"Write: seyal {target}(response):")
         for name, pos in self.used_input_names:
             if name not in self.input_names:
                 self.warn(pos, f"No input component named '{name}' is declared.", "unknown_input",
@@ -542,6 +562,8 @@ class Compiler:
                     self.error(a, f"{name} argument {i + 1} must be {self._tname(want)}, not {self._tname(lt)}.", "type_mismatch")
             if name in ("screen_ku_poo", "screen_maathu") and args and args[0]["t"] == "str":
                 self.nav_targets.append((args[0]["v"], e["pos"]))
+            if name in API_CALLS:
+                self._check_api_call(name, e, args)
             if name in ("input_value", "input_set") and args and args[0]["t"] == "str":
                 self.used_input_names.append((args[0]["v"], args[0]["pos"]))
             return out
@@ -555,6 +577,18 @@ class Compiler:
             pool = list(self.functions) + list(self.spec["functions"]) + list(self.spec["components"])
             self.error(e, f"Unknown function '{name}'.", "unknown_function", self.suggest(name, pool))
         return out
+
+    def _check_api_call(self, name: str, e: dict, args: list[dict]) -> None:
+        """api_* / location_edu: the URL must be https:// (when it is a literal) and the handler must name a one-parameter function."""
+        if name.startswith("api_") and args and args[0]["t"] == "str" and not args[0]["v"].lower().startswith("https://"):
+            self.error(e["args"][0], f"{name}: only https:// URLs are allowed.", "api_needs_https",
+                       "Use https:// (plain http:// is blocked so nothing travels unencrypted).")
+        if len(args) != API_CALLS[name]:
+            return  # the arity error is already reported
+        if args[-1]["t"] == "str":
+            self.callback_targets.append((args[-1]["v"], e["args"][-1]["pos"], name))
+        elif not (args[-1]["t"] == "name" and args[-1]["n"] in self.functions):  # a bare function name already has its own error
+            self.error(e["args"][-1], f"{name}: the handler must be a function name in quotes, e.g. \"got_data\".", "bad_handler")
 
     def _arity(self, e: dict, lo: int, hi: int, doc: str | None = None):
         n = len(e["args"])

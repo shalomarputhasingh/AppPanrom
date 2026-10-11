@@ -337,18 +337,81 @@ Aliases are intentionally avoided: there is one name per operation.
 | `clipboard_copy(text)` | copy text to the clipboard (needs a user tap; no Android permission required). In the preview it needs a browser that allows it, otherwise a console warning is logged |
 | `vibrate_pannu(milliseconds)` | vibrate the phone, 1-5000 ms. Declares the `VIBRATE` permission. The preview only vibrates on devices that support it (otherwise a warning is logged) |
 | `screen_data_get(key, default=null)` |  |
+| `api_get(url, "handler")` / `api_vaangu` | fetch an `https://` URL in the background, see section 7a |
+| `api_post(url, body, "handler")` / `api_anuppu` | send `body` (any JSON-compatible value) with POST |
+| `api_put(url, body, "handler")` / `api_maathi_anuppu` | same with PUT |
+| `api_delete(url, "handler")` / `api_alikka` | DELETE request |
+| `location_edu("handler")` | ask for the phone's location (asks the user), see section 7b |
+| `notification_kaattu(title, text)` | show a system notification (asks the user on Android 13+), see section 7b |
+
+### 7a. Web requests (`api_get`, `api_post`, `api_put`, `api_delete`)
+
+```
+mari veppam = 0
+seyal vandhuduchu(r):
+    enna_na r["ok"]:
+        veppam = r["data"]["current_weather"]["temperature"]
+    illana:
+        message_kaattu("Problem: " + r["error"])
+seyal edu():
+    api_vaangu("https://api.open-meteo.com/v1/forecast?latitude=13.08&longitude=80.27&current_weather=true", "vandhuduchu")
+```
+
+* The request runs in the background; the app keeps working. When the answer (or a failure) arrives, the **handler** runs. The handler is
+  a function *named in quotes* that takes exactly **one parameter** (the compiler checks both). Because the answer arrives later, show a
+  `loading_kaattu` while a variable like `nilai` says "loading" (see `examples/vaanilai.apn`).
+* The handler gets a dictionary: `ok` (true for 2xx), `status` (number, 0 when there was no answer), `data` (the parsed JSON, or `null`
+  when the answer is not JSON), `text` (the raw text, max 256 000 characters) and `error` (empty, or a plain message such as "The request timed out.").
+* Only `https://` URLs. A literal `http://...` is a compile error, a computed one an error at run time. No user name/password in the URL.
+* The program cannot add headers or cookies (so it cannot leak a secret by accident) and a body is always sent as JSON. Redirects are **not followed**
+  (a 301/302 is delivered as the status). Only JSON/text answers are accepted (no images/files). Max 4 requests at once, body max 64 000 characters, 15 s limit.
+* They can be used from event handlers and functions they call, not while a screen is being drawn (same rule as `toast_kaattu`).
+* **Where the request is made.** Studio preview: through the Studio's own server-side proxy (`/api/proxy`). Android app: a small native client
+  (`NativeBridge`). Both refuse hosts that resolve to anything but a public internet address (loopback, 10.x, 192.168.x, 169.254.x, link-local, CGNAT, unique-local...),
+  so an app cannot be used to probe your PC or home network. The Studio proxy also connects to the exact IP it checked; the Android client checks the address and
+  then connects by name (a DNS answer that changes in between is not pinned there).
+* If the handler no longer exists after you edit the code, a late answer is dropped quietly.
+
+### 7b. Location and notifications (permissions asked while the app runs)
+
+```
+seyal idam_vandhuduchu(r):
+    enna_na r["ok"]:
+        message_kaattu("Lat " + text_aakku(r["lat"]) + ", Lon " + text_aakku(r["lon"]))
+    illana_enna r["denied"]:
+        message_kaattu("Permission venaam-nu sollitta")
+    illana:
+        message_kaattu(r["error"])
+seyal edu():
+    location_edu("idam_vandhuduchu")
+    notification_kaattu("Vanakkam", "Idam kandupidikkirom")
+```
+
+* `location_edu("handler")` starts a one-time location read. The first time, **Android shows its permission dialog at that moment** (never at install
+  or start-up). The handler gets a dictionary: `ok`, `lat`, `lon`, `accuracy` (metres), `denied` (true when the user said no) and `error` (plain text when something else went wrong: location switched off,
+  no fix within 25 s...). A "no" is a normal answer; the app does not crash. One request at a time. The handler must take exactly 1 parameter.
+* `notification_kaattu(title, text)` shows a system notification (title max 100, text max 500 characters). Android 13+ asks the user for permission the first time. If notifications are not
+  allowed, the app shows `title: text` as a short in-app message instead, so the information is not lost.
+* **Studio preview:** the *browser* asks. `location_edu` uses your browser's location (it shows the browser's own prompt, needs `localhost`/https) and `notification_kaattu` uses browser notifications; if the browser says no, you get the same
+  `denied` answer / in-app message as on a phone. Note that the preview asks your browser, not Android: it shows the logic works, not the Android dialog.
+* Declared permissions: `ACCESS_FINE_LOCATION` + `ACCESS_COARSE_LOCATION` (the user may grant approximate only) and `POST_NOTIFICATIONS`. The generated manifest also marks GPS hardware as *not required* so the app
+  stays installable on phones without it.
+* Camera, microphone, contacts, files and background location are **not** implemented.
 
 ## 8. Android permissions
 
 The compiler works out which Android permissions your program needs and the APK declares **exactly those** (also shown in the Studio's
-Build tab). Both are *install-time* ("normal") permissions: no runtime prompt appears.
+Build tab). `INTERNET` and `VIBRATE` are *install-time* ("normal") permissions: no prompt appears. Location and notifications are *runtime* permissions: the Studio's Build tab marks them "asks the user when the app runs", and Android asks at the moment your code first needs them.
 
 | Feature used | Permission | Why |
 |---|---|---|
 | `image_kaattu` | `INTERNET` | images are loaded from the internet |
+| `api_get` / `api_post` / `api_put` / `api_delete` | `INTERNET` | the app talks to web APIs |
+| `location_edu` | `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION` | the phone's location (**asked while the app runs**) |
+| `notification_kaattu` | `POST_NOTIFICATIONS` | system notifications (**asked while the app runs**, Android 13+) |
 | `vibrate_pannu` | `VIBRATE` | making the phone vibrate |
 
-Permissions that need a runtime prompt (camera, location, notifications...) are **not implemented**. Nothing is requested "just in case".
+Camera, microphone, contacts and storage permissions are **not implemented**. Nothing is requested "just in case".
 
 ## 9. Local data storage
 
@@ -361,19 +424,19 @@ encrypted. Do not store passwords or tokens.
 ## 10. Runtime limits and security model
 
 * Source is untrusted. It is parsed with a fixed grammar and run by an interpreter with a function allow-list;
-  there is no `eval`, `exec`, import, file, process or network access from AppPanrom code.
+  there is no `eval`, `exec`, import, file or process access from AppPanrom code. Network access exists only through the checked `api_*` functions above.
 * Limits per entry point (startup, event, or screen draw): 1 000 000 interpreter steps (endless loops stop with an
   error), 100 nested calls, lists ≤ 100 000 items, text ≤ 1 000 000 characters, log lines ≤ 2 000 characters.
   These resource errors cannot be caught by `try`.
 * The Studio preview runs in a sandboxed iframe (`allow-scripts` only, no same-origin access, restrictive CSP).
 * The Android app serves its files from the APK over a virtual https origin with `file://` access disabled, a restrictive
-  CSP, and **no JavaScript-to-native bridge**.
+  CSP, and a JavaScript-to-native bridge **only in apps that use `api_*`, `location_edu` or `notification_kaattu`**; each method of it checks that the program really uses that feature (and `http` enforces the rules in 7a). Other apps have none.
 * Random functions use `Math.random` and are **not** cryptographically secure.
 
 ## 11. Supported vs. unsupported
 
 Implemented and tested: everything in this document. **Not implemented** (the compiler says so if you use them):
-`api_get, api_post, api_put, api_delete, api_json, dialog_kaattu, app_icon_set, app_config, state_uruvakku, state_get, state_set, ui_refresh, screen_refresh, vadivelu_mode, enna_kodumai_debug, summa_adirudhulla, gradient_set, shadow_set`. Network APIs and runtime-permission device capabilities (camera, location, notifications...)
+`api_json, dialog_kaattu, app_icon_set, app_config, state_uruvakku, state_get, state_set, ui_refresh, screen_refresh, vadivelu_mode, enna_kodumai_debug, summa_adirudhulla, gradient_set, shadow_set`. Runtime-permission device capabilities (camera, microphone, contacts...)
 are future work. The app icon, release signing and AAB output are handled by the Studio / build pipeline, not by language functions. The optional "fun mode" is not implemented.
 
 ## 12. Common errors

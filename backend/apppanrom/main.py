@@ -22,6 +22,7 @@ from .config import Settings
 from .db import Database
 from .lang import compile_source
 from .lang.designer import DesignError, apply_op, describe, describe_app
+from .proxy import ProxyConfig
 from .ai import AiConfig, AiError, ChatMessage, assist
 from .lang.spec import REPO_ROOT, load_spec
 from .lang.tanglish import detect_style, to_english, to_tanglish
@@ -102,6 +103,12 @@ class AiKey(BaseModel):
     key: str = Field(min_length=8, max_length=300)
 
 
+class WebRequest(BaseModel):
+    method: Literal["GET", "POST", "PUT", "DELETE"]
+    url: str = Field(max_length=2048)
+    body: str | None = Field(default=None, max_length=64_000)
+
+
 class ConvertBody(BaseModel):
     source: str = Field(max_length=200_000)
     to: Literal["tanglish", "english"]
@@ -126,7 +133,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="AppPanrom API", version=__version__, lifespan=lifespan)
     ai = AiConfig(s.ai_api_key, s.ai_model, s.ai_base_url, tier=s.ai_tier, tpm=s.ai_tpm, fallback_models=s.ai_fallback_models, max_inline_wait=s.ai_max_wait_s)
-    app.state.settings, app.state.store, app.state.builds, app.state.ai = s, store, builds, ai
+    proxy = ProxyConfig(allow_private=s.proxy_allow_private, ca_file=s.proxy_ca_file)
+    app.state.settings, app.state.store, app.state.builds, app.state.ai, app.state.proxy = s, store, builds, ai, proxy
 
     if s.cors_origins:
         app.add_middleware(CORSMiddleware, allow_origins=s.cors_origins, allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
@@ -182,6 +190,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"version": __version__, "android": check_prerequisites(s), "signing": check_signing(s),
                 "limits": {"max_file_bytes": s.max_file_bytes, "max_files_per_project": s.max_files_per_project,
                            "build_timeout_s": s.build_timeout_s}}
+
+    # ---- web requests made by the previewed app (api_get / api_post ...): validated proxy, see proxy.py
+    @app.post("/api/proxy")
+    def web_proxy(body: WebRequest):
+        return proxy.run(body.method, body.url, body.body)
 
     # ---- AI assistant (Groq). The key is never returned, stored or logged.
     @app.get("/api/ai/status")

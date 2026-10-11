@@ -60,7 +60,9 @@ screen_uruvakku("home"):
 | Release signing + release APK + AAB (keystore from environment, signature independently verified when tools are available) | ✅ built and signature-verified for real (apksigner / jarsigner); install on a device not tested |
 | Persistence of projects/builds across restarts (SQLite + files) | ✅ |
 | Android build pipeline (generate project → Gradle → verify → download) | ✅ real `assembleDebug` / release APK / AAB succeeded with a real SDK; **⚠ never installed or launched on a device/emulator** (see below) |
-| Network APIs (`api_get`…), runtime-permission device capabilities (camera, location…), dialogs, gradients/custom fonts, extra themes, "fun mode" | ❌ not implemented (the compiler says so) |
+| **Web requests**: `api_get` / `api_post` / `api_put` / `api_delete` (Tanglish `api_vaangu`, `api_anuppu`…): background request, handler function gets `{ok, status, data, text, error}`; https only, public addresses only, no redirects, size/time limits. Studio: validated server-side proxy. Android: native client | ✅ tested: 49 proxy tests incl. a real TLS round trip on loopback, runtime tests, Chromium (Studio + generated bundle with a stand-in bridge); **a real APK with the bridge compiled with Gradle**; ⚠ never run on a device, never called against the real internet from this environment |
+| **Runtime-permission device features**: `location_edu("handler")`, `notification_kaattu(title, text)`; Android asks the user at the moment the code needs it, "no" is a normal answer | ✅ runtime + Chromium (browser grants/denies in the Studio preview); **a real APK with the location/notification code compiled** and its manifest checked (`aapt2`); ⚠ the Android permission dialogs, GPS fix and notification display were **never run on a device or emulator** |
+| Camera/microphone/contacts, `api_json`, dialogs, gradients/custom fonts, extra themes, "fun mode" | ❌ not implemented (the compiler says so) |
 | Authentication / multi-user | ❌ local single-user MVP |
 
 ### Honest note on APK builds
@@ -71,7 +73,7 @@ Verified **for real** (Android SDK 34 / build-tools 34.0.0 from dl.google.com, J
   activity), `assets/www/apppanrom-runtime.js` byte-identical to `runtime/apppanrom-runtime.js`, and the debug signature verifies with `apksigner`.
 * The same through the Studio pipeline: API and the Studio **Build** tab (driven with Chromium) built debug APK, release APK and release AAB;
   each artifact downloaded and verified. The uploaded icon is in the APK (`application: icon=…`).
-* `INTERNET` and `VIBRATE` are declared in the built APK exactly when `image_kaattu` / `vibrate_pannu` are used (checked with `aapt2 dump permissions`).
+* Permissions are declared in the built APK exactly when the matching function is used (INTERNET for `image_kaattu` / `api_*`, VIBRATE, location, POST_NOTIFICATIONS; checked with `aapt2 dump permissions` in the real-build tests).
 * Release: a throwaway keystore from `make-keystore`; release APK verified by `apksigner verify`, AAB by `jarsigner -verify`; a release build without
   the signing variables fails with `signing_not_configured` and produces no artifact.
 * `backend/tests/test_real_build.py` automates the above (runs only when `ANDROID_HOME` is set) and is the `android-build` job in
@@ -210,7 +212,7 @@ published app) and never commit them.
 | Release buttons are disabled | The three `APPANROM_KEYSTORE*` variables were not set when the server started |
 
 Development mode with hot reload (two terminals): `make dev-backend` (API on :8000) and `make dev-frontend` (Studio on :5173).
-Press **▶ Run** (or Ctrl+Enter) to compile and preview. Sample programs are in `examples/` and in the Studio's **Reference → Examples**. `examples/showcase.apn` demonstrates every look and animation plus a custom top bar, a screen with no bar, and tabs, and `examples/machan.apn` is a complete Tanglish app (its icon is `machan-icon.png`). `examples/calculator.apn` + `examples/calculator-icon.png` is a full colourful calculator app (upload the PNG in Settings → App icon, then build).
+Press **▶ Run** (or Ctrl+Enter) to compile and preview. Sample programs are in `examples/` and in the Studio's **Reference → Examples**. `examples/showcase.apn` demonstrates every look and animation plus a custom top bar, a screen with no bar, and tabs, and `examples/machan.apn` is a complete Tanglish app (its icon is `machan-icon.png`). `examples/vaanilai.apn` fetches live weather with `api_vaangu`, `examples/idam.apn` asks for location/notification permission at run time, `examples/calculator.apn` + `examples/calculator-icon.png` is a full colourful calculator app (upload the PNG in Settings → App icon, then build).
 
 ### Configuration (environment variables)
 
@@ -229,6 +231,8 @@ Press **▶ Run** (or Ctrl+Enter) to compile and preview. Sample programs are in
 | `APPANROM_AI_FALLBACK_MODELS` | `openai/gpt-oss-20b` | Backup models (their limits are separate), used only if you pick "use backup model" in the AI panel |
 | `APPANROM_AI_MAX_WAIT` | `20` | Waits up to this many seconds happen quietly on the server; longer ones show a countdown in the Studio |
 | `APPANROM_AI_BASE_URL` | Groq | Another OpenAI-compatible endpoint (https, or http to localhost) |
+| `APPANROM_PROXY_ALLOW_PRIVATE` | off | **Unsafe, for local testing only (`1` to enable):** lets the web-request proxy reach loopback/private addresses |
+| `APPANROM_PROXY_CA_FILE` | system CAs | Extra trusted CA bundle (PEM) for the web-request proxy, e.g. a corporate CA or a test server's certificate |
 | `APPANROM_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Allowed browser origins (`*` is ignored) |
 
 Only an allow-list of environment variables (PATH, HOME, proxy settings, Java/Android locations) is passed to Gradle;
@@ -250,8 +254,7 @@ Maven Central on first build.
 ### App icon, permissions, signing, AAB
 
 * **Icon:** Settings → App icon (square PNG, 192–1024 px, ≤500 KB). It becomes the launcher icon.
-* **Permissions:** declared automatically from what your code uses (`image_kaattu` → INTERNET, `vibrate_pannu` → VIBRATE) and listed in the Build tab.
-  Runtime-prompt permissions are not implemented.
+* **Permissions:** declared automatically from what your code uses (`image_kaattu` and `api_*` → INTERNET, `vibrate_pannu` → VIBRATE, `location_edu` → fine + coarse location, `notification_kaattu` → POST_NOTIFICATIONS) and listed in the Build tab, which marks the ones Android asks for while the app runs.
 * **Release signing (never in the repo, the database or the logs):**
   1. `cd backend && python3 -m apppanrom.cli make-keystore ~/keys/myapp.jks --alias release` (prompts for a password; needs `keytool`).
   2. Start the backend with `APPANROM_KEYSTORE`, `APPANROM_KEYSTORE_PASSWORD`, `APPANROM_KEY_ALIAS` (and `APPANROM_KEY_PASSWORD` if different).
@@ -310,13 +313,18 @@ plugins' code from the template's dependencies; project source never reaches Gra
 the IR as data). Implemented safeguards: strict identifier/path validation (flat file names, generated ids,
 `fullmatch` regexes), request/source/log size limits, interpreter step/depth/size limits, sandboxed preview iframe with
 CSP, restrictive CORS, no stack traces in API errors, no secrets in generated projects, no keystores in the repo.
-There is no network access from AppPanrom code yet, so there is no SSRF surface; when `api_*` functions are added they must
-go through a server-side validated proxy.
+Network access from AppPanrom code exists only through `api_get/post/put/delete`, and the Studio makes those requests through a
+validated server-side proxy (`backend/apppanrom/proxy.py`, `POST /api/proxy`): https only, no credentials in URLs, the host is resolved and **every**
+address must be public (loopback, private, link-local, CGNAT, unique-local, multicast... are refused), the connection goes to the exact IP that was checked
+(certificate verified for the host name), redirects are never followed, no cookies/custom headers/user credentials are forwarded, body ≤ 64 KB, response ≤ 256 KB of JSON/text, 10 s, 120 requests/minute.
+The Android app does the same checks natively (`NativeBridge.java`), except that it connects by host name after checking the address (no IP pinning there).
+Because the proxy is an endpoint of this *unauthenticated* local server, it is one more reason not to expose the Studio to the internet.
 
 ## Known limitations / next steps
 
 * Install and launch the built APK on an emulator/device (not possible in the environment used so far); confirm the CI workflow runs on GitHub.
-* Network APIs, runtime-permission device capabilities, dialogs, more themes. 
+* Web requests: no custom headers (so no API keys in requests), no streaming/file download/upload, no redirects followed; on Android no IP pinning. Device features: no camera/microphone/contacts; location is one-shot (no background or continuous updates); notifications are immediate only (no scheduling). None of this has been run on a real phone yet.
+* `api_json`, dialogs, more themes.
 * Designer: no resize handles or free positioning (layout is flex-based, so you reorder/nest and set sizes in the inspector); selection is cleared when you type in the code (line numbers shift); edits to components that were generated by loops act on the one source line.
 * Text-input IME: redraws are deferred during composition; the whole screen is rebuilt on each event (fine for small apps).
 * Only `main.apn` is compiled; additional files are notes.

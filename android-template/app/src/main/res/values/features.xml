@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Overwritten per build by the project generator: which native features this app's program uses. -->
+    <bool name="ap_net">false</bool>
+    <bool name="ap_location">false</bool>
+    <bool name="ap_notify">false</bool>
+</resources>

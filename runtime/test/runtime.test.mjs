@@ -387,3 +387,149 @@ test('navbar and tab bar: views, switching screens without history, hidden bar',
   rt.fire('hide');                                                   // screen_maathu from code
   assert.deepEqual(logs.filter((l) => l.level === 'error'), []);
 });
+
+// ---------------------------------------------------------------- web APIs
+const NET_APP = `mari out = "-"
+mari code = 0
+function got(r):
+    out = r["text"]
+    code = r["status"]
+function load():
+    api_get("https://api.example.com/hi", "got")
+function save():
+    api_post("https://api.example.com/hi", {"a": 1}, "got")
+function http_url():
+    mari u = "http://api.example.com/hi"
+    api_get(u, "got")
+function many():
+    api_get("https://a.example.com", "got")
+    api_get("https://b.example.com", "got")
+    api_get("https://c.example.com", "got")
+    api_get("https://d.example.com", "got")
+    api_get("https://e.example.com", "got")
+screen_uruvakku("home"):
+    text_kaattu(out)
+    button("go", click_pannumbodhu=load)
+`;
+const tick = () => new Promise((r) => setTimeout(r, 5));
+
+test('api_get calls the host and runs the handler with ok/status/data/text', async () => {
+  const seen = [];
+  const http = (req, done) => { seen.push(req); done({ status: 200, text: '{"x":[1,2]}' }); };
+  const { rt } = boot(NET_APP, { http });
+  rt.fire('load');
+  assert.deepEqual(seen, [{ method: 'GET', url: 'https://api.example.com/hi', body: null }]);
+  await tick();
+  assert.equal(rt.globals.get('code'), 200);
+  assert.equal(rt.globals.get('out'), '{"x":[1,2]}');
+});
+
+test('api_post sends the body as JSON text', async () => {
+  const seen = [];
+  const { rt } = boot(NET_APP, { http: (req, done) => { seen.push(req); done({ status: 201, text: 'made' }); } });
+  rt.fire('save');
+  assert.equal(seen[0].method, 'POST');
+  assert.equal(seen[0].body, '{"a":1}');
+  await tick();
+  assert.equal(rt.globals.get('code'), 201);
+});
+
+test('handler gets ok=false and an error message when the host reports a failure', async () => {
+  const src = NET_APP.replace('out = r["text"]', 'out = r["error"]\n    mari_ok = r["ok"]').replace('    mari_ok = r["ok"]\n', '');
+  const { rt } = boot(src, { http: (req, done) => done({ error: 'network down' }) });
+  rt.fire('load');
+  await tick();
+  assert.equal(rt.globals.get('out'), 'network down');
+  assert.equal(rt.globals.get('code'), 0);
+});
+
+test('http:// URLs and too many parallel requests are refused at run time', () => {
+  const { rt, logs } = boot(NET_APP, { http: () => {} });
+  assert.throws(() => rt.callFunction('http_url', []), /only https/);
+  assert.throws(() => rt.callFunction('many', []), /too many requests/);
+});
+
+test('api calls cannot run while drawing and degrade without a host', async () => {
+  const { rt, logs } = boot(NET_APP);
+  rt.fire('load');
+  await tick();
+  assert.ok(logs.some((l) => l.level === 'warning' && /not available/.test(l.text)));
+  assert.equal(rt.globals.get('out'), '');
+  const { rt: rt2 } = boot('function got(r):\n    return 1\nscreen_uruvakku("home"):\n    api_get("https://x.example.com", "got")\n    title("x")\n', { http: () => {} });
+  assert.throws(() => rt2.render(), /cannot be used while the screen is being drawn/);
+});
+
+test('a late response goes to the current runtime and is dropped if the handler is gone (hot reload)', async () => {
+  let reply;
+  const fired = [];
+  const stale = { hasFunction: () => false, fire: () => fired.push('stale') };
+  const live = { hasFunction: (n) => n === 'got', fire: (n, a) => fired.push([n, a[0].status]) };
+  let target = null;
+  const { rt } = boot(NET_APP, { http: (req, done) => { reply = done; }, current: () => target });
+  rt.fire('load');
+  target = stale; reply({ status: 200, text: 'late' }); await tick();
+  assert.deepEqual(fired, []);
+  rt.fire('load');
+  target = live; reply({ status: 204, text: '' }); await tick();
+  assert.deepEqual(fired, [['got', 204]]);
+});
+
+// ---------------------------------------------------------------- runtime-permission features
+const DEV_APP = `mari where = "-"
+function here(r):
+    where = str(r["ok"]) + "|" + str(r["lat"]) + "|" + str(r["denied"]) + "|" + r["error"]
+function find():
+    location_edu("here")
+function twice():
+    location_edu("here")
+    location_edu("here")
+function ping():
+    notification_kaattu("Vanakkam", "Naan dhaan notification")
+function untitled():
+    notification_kaattu("  ", "x")
+screen_uruvakku("home"):
+    title("x")
+`;
+
+test('location_edu: the handler gets coordinates, a denial is a normal answer, a second request is refused while one runs', async () => {
+  let reply;
+  const { rt } = boot(DEV_APP, { location: (done) => { reply = done; } });
+  rt.fire('find');
+  assert.throws(() => rt.callFunction('twice', []), /already running/);
+  reply({ lat: 13.08, lon: 80.27, accuracy: 20 });
+  await tick();
+  assert.equal(rt.globals.get('where'), 'true|13.08|false|');
+  rt.fire('find');
+  reply({ denied: true });
+  await tick();
+  assert.match(rt.globals.get('where'), /^false\|0\|true\|Location permission was not given/);
+  rt.fire('find');
+  reply({ lat: 999, lon: 0 });                       // nonsense coordinates are never handed to the program as good data
+  await tick();
+  assert.match(rt.globals.get('where'), /^false\|0\|false\|The location could not be read/);
+});
+
+test('location_edu without a host reports a plain error to the handler', async () => {
+  const { rt, logs } = boot(DEV_APP);
+  rt.fire('find');
+  await tick();
+  assert.match(rt.globals.get('where'), /^false\|0\|false\|Location is not available here/);
+  assert.ok(logs.some((l) => l.level === 'warning'));
+});
+
+test('notification_kaattu calls the host; when it fails or is missing the user still sees a message', () => {
+  const shown = [], toasts = [];
+  const { rt } = boot(DEV_APP, { notify: (t, x, done) => { shown.push([t, x]); done({}); }, toast: (m) => toasts.push(m) });
+  rt.fire('ping');
+  assert.deepEqual(shown, [['Vanakkam', 'Naan dhaan notification']]);
+  assert.deepEqual(toasts, []);
+  const denied = [];
+  const b = boot(DEV_APP, { notify: (t, x, done) => done({ error: 'Notifications are turned off.' }), toast: (m) => denied.push(m) });
+  b.rt.fire('ping');
+  assert.deepEqual(denied, ['Vanakkam: Naan dhaan notification']);
+  const none = [];
+  const c = boot(DEV_APP, { toast: (m) => none.push(m) });
+  c.rt.fire('ping');
+  assert.deepEqual(none, ['Vanakkam: Naan dhaan notification']);
+  assert.throws(() => c.rt.callFunction('untitled', []), /needs a title/);
+});

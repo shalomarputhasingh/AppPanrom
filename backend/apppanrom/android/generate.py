@@ -33,7 +33,23 @@ INDEX_HTML = """<!doctype html>
 
 APP_JS = """window.__APPANROM_IR__ = %s;
 (function () {
+  // Web requests go through the native bridge, which exists only when the program uses api_get / api_post / ...
+  var pending = {}, counter = 0;
+  window.__apNativeDone = function (id, json) {
+    var cb = pending[id]; delete pending[id];
+    if (!cb) return;
+    var res; try { res = JSON.parse(json); } catch (e) { res = { error: 'The reply could not be read.' }; }
+    cb(res);
+  };
+  var N = window.ApNative;
+  function ask(done) { var id = 'r' + (++counter); pending[id] = done; return id; }
+  var http = N && N.http ? function (req, done) { N.http(ask(done), req.method, req.url, req.body); } : undefined;
+  var location = N && N.location ? function (done) { N.location(ask(done)); } : undefined;
+  var notify = N && N.notification ? function (title, text, done) { N.notification(ask(done), title, text); } : undefined;
   var ctrl = AppPanrom.mount(window.__APPANROM_IR__, document.getElementById('app'), {
+    http: http,
+    location: location,
+    notify: notify,
     log: function (level, text) { if (window.console) console[level === 'debug' ? 'log' : (console[level] ? level : 'log')](text); }
   });
   window.__apBack = function () { return ctrl.goBack(); };
@@ -71,6 +87,18 @@ def permissions(ir: dict) -> list[str]:
     return perms
 
 
+def native_features(ir: dict) -> str:
+    """res/values/features.xml: which native bridge features the program uses (the bridge exists only if one is on)."""
+    used = {u for p in ir.get("permissions", []) for u in p.get("used_by", [])}
+    flags = {
+        "ap_net": any(u.startswith("api_") for u in used),
+        "ap_location": "location_edu" in used,
+        "ap_notify": "notification_kaattu" in used,
+    }
+    rows = "".join(f'    <bool name="{k}">{"true" if v else "false"}</bool>\n' for k, v in flags.items())
+    return f'<?xml version="1.0" encoding="utf-8"?>\n<resources>\n{rows}</resources>\n'
+
+
 def generate_project(ir: dict, dest: Path, icon: Path | None = None) -> None:
     """Writes a complete Gradle project into `dest` (must not exist). Values come from the validated IR only."""
     app = ir["app"]
@@ -91,7 +119,12 @@ def generate_project(ir: dict, dest: Path, icon: Path | None = None) -> None:
     gradle.write_text(text, encoding="utf-8")
 
     manifest = dest / "app" / "src" / "main" / "AndroidManifest.xml"
-    perms = "\n".join(f'    <uses-permission android:name="{p}" />' for p in permissions(ir))
+    names = permissions(ir)
+    perms = "\n".join(f'    <uses-permission android:name="{p}" />' for p in names)
+    if "android.permission.ACCESS_FINE_LOCATION" in names:
+        # fine location would otherwise make Google Play treat a GPS chip as required and hide the app from some devices
+        perms += '\n    <uses-feature android:name="android.hardware.location" android:required="false" />'
+        perms += '\n    <uses-feature android:name="android.hardware.location.gps" android:required="false" />'
     icon_attr = ""
     if icon is not None:
         try:
@@ -106,6 +139,7 @@ def generate_project(ir: dict, dest: Path, icon: Path | None = None) -> None:
     manifest.write_text(text, encoding="utf-8")
 
     res = dest / "app" / "src" / "main" / "res" / "values"
+    (res / "features.xml").write_text(native_features(ir), encoding="utf-8")
     (res / "strings.xml").write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <string name="app_name">'
         + xml_text(app["name"]) + "</string>\n</resources>\n", encoding="utf-8")

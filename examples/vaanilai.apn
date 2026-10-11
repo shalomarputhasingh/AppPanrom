@@ -1,0 +1,67 @@
+# Vaanilai - oru ooru-oda weather-a internet-la irundhu edukkum app (web API demo, Tanglish).
+# api_vaangu(url, "seyal-peyar") request-a background-la anuppum; pathil vandha-pin antha seyal {ok, status, data, text, error} oda odum.
+# API: open-meteo.com (key thevai illa). Android-la INTERNET permission mattum thaan.
+app_uruvakku("Vaanilai")
+app_id_set("com.apppanrom.vaanilai")
+app_version_set("1.0.0")
+
+mari oorugal = [
+    {"peyar": "Chennai", "lat": 13.08, "lon": 80.27},
+    {"peyar": "Madurai", "lat": 9.92, "lon": 78.12},
+    {"peyar": "Coimbatore", "lat": 11.02, "lon": 76.96},
+    {"peyar": "Trichy", "lat": 10.79, "lon": 78.70}
+]
+mari ooru = oorugal[0]
+mari nilai = "ready"
+mari veppam = 0
+mari kaatru = 0
+mari seithi = "Oru ooru-a thervu pannu machan."
+
+seyal dialogue_sollu(t):
+    enna_na t >= 36:
+        thirumbi_kudu "Veyil kodumai machan! Thanni kudichitte iru, kuda eduthuttu po."
+    enna_na t >= 31:
+        thirumbi_kudu "Chennai veyil-nu sonnaale ippadi thaan, adjust pannikko."
+    enna_na t >= 25:
+        thirumbi_kudu "Nalla vaanilai da, oru filter coffee podalaam."
+    thirumbi_kudu "Kulira irukku, sweater edu machan!"
+
+seyal vandhuduchu(r):
+    enna_na illaadha r["ok"]:
+        nilai = "error"
+        seithi = "Internet illa pola machan: " + r["error"]
+        thirumbi_kudu onnum_illa
+    muyarchi:
+        mari cw = r["data"]["current_weather"]
+        veppam = cw["temperature"]
+        kaatru = cw["windspeed"]
+        seithi = dialogue_sollu(veppam)
+        nilai = "done"
+    pidi error:
+        nilai = "error"
+        seithi = "Pathil purinjukka mudiyala: " + text_aakku(r["status"])
+
+seyal edu(i):
+    ooru = oorugal[i]
+    nilai = "loading"
+    mari url = "https://api.open-meteo.com/v1/forecast?latitude=" + text_aakku(ooru["lat"]) + "&longitude=" + text_aakku(ooru["lon"]) + "&current_weather=true"
+    api_vaangu(url, "vandhuduchu")
+
+screen_uruvakku("home", style={"background": "#E0F2FE", "text_color": "#0C4A6E"}):
+    screen_title("Vaanilai")
+    navbar_uruvakku(thalaippu="Vaanilai", subtitle="Live weather", align="center", back=thappu)
+    column_uruvakku(style={"padding": 20, "gap": 14}):
+        thalaippu(ooru["peyar"], style={"animate": "slide_up"})
+        card_uruvakku(style={"clay": sari, "background": "#BAE6FD", "padding": 18, "gap": 6, "corner_radius": 28}):
+            enna_na nilai == "loading":
+                loading_kaattu(peyar="Vaanilai edukkirom...")
+            illana_enna nilai == "done":
+                text_kaattu(text_aakku(veppam) + " C", style={"font_size": 44, "font_weight": "bold"})
+                text_kaattu("Kaatru: " + text_aakku(kaatru) + " km/h")
+            text_kaattu(seithi)
+        text_kaattu("Ooru thervu pannu:")
+        row_uruvakku(style={"gap": 8, "wrap": sari}):
+            batan("Chennai", click_pannumbodhu=edu(0), style={"clay": sari, "background": "#FDE68A", "text_color": "#0C4A6E"})
+            batan("Madurai", click_pannumbodhu=edu(1), style={"clay": sari, "background": "#FBCFE8", "text_color": "#0C4A6E"})
+            batan("Coimbatore", click_pannumbodhu=edu(2), style={"clay": sari, "background": "#BBF7D0", "text_color": "#0C4A6E"})
+            batan("Trichy", click_pannumbodhu=edu(3), style={"clay": sari, "background": "#DDD6FE", "text_color": "#0C4A6E"})

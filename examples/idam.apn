@@ -1,0 +1,49 @@
+# Naan Enga? - phone-oda idam (location) + notification demo (Tanglish).
+# location_edu("seyal") user kitta permission kekkum; "sari" na idam varum, "venaam" na denied=sari-nu varum - app crash aagaadhu.
+# notification_kaattu(thalaippu, text) system notification kaattum (Android 13+ la permission kekkum).
+app_uruvakku("Naan Enga")
+app_id_set("com.apppanrom.idam")
+app_version_set("1.0.0")
+
+mari nilai = "ready"
+mari lat = 0
+mari lon = 0
+mari thuliyam = 0
+mari seithi = "Un idam-a kandupidikka button-a amukku machan."
+
+seyal idam_vandhuduchu(r):
+    enna_na r["ok"]:
+        lat = r["lat"]
+        lon = r["lon"]
+        thuliyam = suththam_pannu(r["accuracy"])
+        nilai = "found"
+        seithi = "Nee inga thaan irukka machan!"
+    illana_enna r["denied"]:
+        nilai = "denied"
+        seithi = "Permission venaam-nu sollitta. Settings-la 'Allow' pannu, apram try pannu."
+    illana:
+        nilai = "error"
+        seithi = "Idam kidaikala: " + r["error"]
+
+seyal idam_edu():
+    nilai = "loading"
+    location_edu("idam_vandhuduchu")
+
+seyal solluven():
+    notification_kaattu("Naan Enga", "Idam: " + text_aakku(lat) + ", " + text_aakku(lon))
+
+screen_uruvakku("home", style={"background": "#ECFDF5", "text_color": "#064E3B"}):
+    screen_title("Naan Enga?")
+    navbar_uruvakku(thalaippu="Naan Enga?", subtitle="Location + notification", align="center", back=thappu)
+    column_uruvakku(style={"padding": 20, "gap": 14}):
+        thalaippu("Naan Enga?", style={"animate": "slide_up"})
+        card_uruvakku(style={"clay": sari, "background": "#A7F3D0", "padding": 18, "gap": 6, "corner_radius": 28}):
+            enna_na nilai == "loading":
+                loading_kaattu(peyar="Idam thedurom...")
+            illana_enna nilai == "found":
+                text_kaattu("Lat: " + text_aakku(lat))
+                text_kaattu("Lon: " + text_aakku(lon))
+                text_kaattu("Thuliyam: " + text_aakku(thuliyam) + " m")
+            text_kaattu(seithi)
+        batan("Idam Edu", click_pannumbodhu=idam_edu, style={"clay": sari, "background": "#FDE68A", "text_color": "#064E3B"})
+        batan("Notification Anuppu", click_pannumbodhu=solluven, style={"clay": sari, "background": "#FBCFE8", "text_color": "#064E3B"})

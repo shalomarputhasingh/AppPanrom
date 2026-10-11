@@ -37,6 +37,8 @@ class Settings:
     ai_tpm: int | None = None                   # tokens per minute to plan around (default 8000 on the free tier)
     ai_fallback_models: list[str] | None = None  # backup models used only when the user chooses "use backup when limited"
     ai_max_wait_s: float = 20.0                  # waits up to this long happen invisibly on the server; longer ones become a countdown in the Studio
+    proxy_allow_private: bool = False            # UNSAFE, for local tests only: lets the web-request proxy reach private/loopback addresses
+    proxy_ca_file: str | None = None             # extra trusted CA bundle for the web-request proxy (corporate CA or a test server)
     max_projects: int = 200
     max_files_per_project: int = 20
     max_file_bytes: int = 200_000
@@ -91,6 +93,8 @@ class Settings:
             ai_tpm=_int("APPANROM_AI_TPM", 0) or None,
             ai_fallback_models=([m.strip() for m in env["APPANROM_AI_FALLBACK_MODELS"].split(",") if m.strip()] if "APPANROM_AI_FALLBACK_MODELS" in env else None),
             ai_max_wait_s=float(_int("APPANROM_AI_MAX_WAIT", 20)),
+            proxy_allow_private=env.get("APPANROM_PROXY_ALLOW_PRIVATE") == "1",
+            proxy_ca_file=env.get("APPANROM_PROXY_CA_FILE") or None,
             cors_origins=[o.strip() for o in origins.split(",") if o.strip() and o.strip() != "*"],
         )
 

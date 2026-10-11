@@ -75,8 +75,41 @@ def test_raw_python_and_shell_are_not_executable():
 
 
 def test_not_implemented_features_are_reported_honestly():
-    r, c = codes('function f():\n    api_get("https://x.com")\n' + BASE)
+    r, c = codes('function f():\n    api_json("https://x.com")\n' + BASE)
     assert c == ["not_implemented"]
+
+
+def test_web_request_calls_are_checked_at_compile_time():
+    ok = 'function got(r):\n    debug_log(r["status"])\nfunction f():\n    api_get("https://x.com/a", "got")\n    api_post("https://x.com/a", {"a": 1}, "got")\n    api_put("https://x.com/a", [1], "got")\n    api_delete("https://x.com/a", "got")\n'
+    r, c = codes(ok + BASE)
+    assert r.ok and c == [], c
+    assert [p["permission"] for p in r.ir["permissions"]] == ["android.permission.INTERNET"]
+    assert r.ir["permissions"][0]["used_by"] == ["api_delete", "api_get", "api_post", "api_put"]
+    assert r.ir["permissions"][0]["runtime"] is False
+    # Tanglish names are the same functions
+    r2, c2 = codes('seyal got(r):\n    pathivu_pannu(r["status"])\nseyal f():\n    api_vaangu("https://x.com/a", "got")\n    api_anuppu("https://x.com/a", {}, "got")\n' + BASE)
+    assert r2.ok, c2
+    bad = lambda body: codes('function got(r):\n    debug_log(r["status"])\nfunction two(a, b):\n    debug_log(a)\nfunction f():\n    ' + body + '\n' + BASE)[1]
+    assert bad('api_get("http://x.com/a", "got")') == ["api_needs_https"]
+    assert bad('api_get("ftp://x.com/a", "got")') == ["api_needs_https"]
+    assert bad('api_get("https://x.com/a", "nope")') == ["undefined_handler"]
+    assert bad('api_get("https://x.com/a", "two")') == ["handler_params"]
+    assert bad('api_get("https://x.com/a")') == ["arity"]
+    assert bad('api_post("https://x.com/a", {}, got)') == ["function_as_value"]       # the handler goes in quotes
+    assert bad('mari h = "got"\n    api_get("https://x.com/a", h)') == ["bad_handler"]
+    assert bad('api_get(5, "got")') == ["type_mismatch"]
+
+
+def test_runtime_permission_calls_are_checked_and_marked_as_runtime_permissions():
+    src = 'function here(r):\n    debug_log(r["ok"])\nfunction f():\n    location_edu("here")\n    notification_kaattu("t", "x")\n'
+    r, c = codes(src + BASE)
+    assert r.ok and c == [], c
+    runtime = {p["permission"]: p["runtime"] for p in r.ir["permissions"]}
+    assert runtime == {"android.permission.ACCESS_COARSE_LOCATION": True, "android.permission.ACCESS_FINE_LOCATION": True, "android.permission.POST_NOTIFICATIONS": True}
+    assert codes('function f():\n    location_edu("nope")\n' + BASE)[1] == ["undefined_handler"]
+    assert codes('function f():\n    notification_kaattu("only title")\n' + BASE)[1] == ["arity"]
+    # an app that uses neither has no permissions at all
+    assert codes('function f():\n    debug_log(1)\n' + BASE)[0].ir["permissions"] == []
 
 
 def test_undefined_variable_and_assignment():

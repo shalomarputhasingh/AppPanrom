@@ -12,11 +12,13 @@ import androidx.webkit.WebViewAssetLoader;
 
 /**
  * Hosts the AppPanrom runtime in a WebView. App files are served from the APK's assets over a
- * virtual https origin (file:// access is disabled). No JavaScript-to-native bridge is exposed.
+ * virtual https origin (file:// access is disabled). A JavaScript-to-native bridge exists only for programs that use web
+ * requests, location or notifications (see NativeBridge); other apps expose none.
  */
 public class MainActivity extends Activity {
     private static final String ORIGIN = "https://appassets.androidplatform.net";
     private WebView web;
+    private NativeBridge bridge;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -43,7 +45,27 @@ public class MainActivity extends Activity {
                 return !request.getUrl().toString().startsWith(ORIGIN + "/assets/");
             }
         });
+        if (getResources().getBoolean(R.bool.ap_net) || getResources().getBoolean(R.bool.ap_location) || getResources().getBoolean(R.bool.ap_notify)) {
+            bridge = new NativeBridge(this, web);
+            web.addJavascriptInterface(bridge, "ApNative");
+        }
         web.loadUrl(ORIGIN + "/assets/www/index.html");
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (bridge != null) {
+            bridge.onPermissionResult(requestCode, grantResults);
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (bridge != null) {
+            bridge.shutdown();
+        }
+        super.onDestroy();
     }
 
     @Override
