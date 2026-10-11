@@ -26,10 +26,34 @@ function findChromium() {
   throw new Error('No Chromium found; set CHROMIUM_PATH');
 }
 
+// A fake Groq (OpenAI-compatible) server: the AI assistant is exercised end to end without a real key or network.
+const aiLog = [];
+const GOOD_MARK = '# edited by the fake AI';
+const fakeGroq = createServer((req, res) => {
+  let raw = '';
+  req.on('data', (c) => { raw += c; });
+  req.on('end', () => {
+    const body = JSON.parse(raw || '{}');
+    const msgs = body.messages ?? [];
+    const last = msgs[msgs.length - 1]?.content ?? '';
+    aiLog.push({ auth: req.headers.authorization, last, count: msgs.length, system: msgs[0]?.content ?? '', model: body.model });
+    const send = (status, payload) => { res.statusCode = status; res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(payload)); };
+    const ok = (text) => send(200, { choices: [{ message: { role: 'assistant', content: text } }], usage: { total_tokens: 42 } });
+    if (/REJECT-KEY/.test(last)) return send(401, { error: { message: 'invalid api key' } });
+    const limited = (secs, why) => { res.setHeader('retry-after', String(secs)); send(429, { error: { message: `Rate limit reached for model ${body.model} on ${why}: Please try again in ${secs}s` } }); };
+    if (/LIMIT-ME/.test(last)) { if (!fakeGroq.limitMe) { fakeGroq.limitMe = true; return limited(4, 'tokens per minute (TPM)'); } return ok('Retried fine.'); }
+    if (/LIMIT-BACKUP/.test(last)) { if (body.model === 'openai/gpt-oss-120b') return limited(90, 'tokens per minute (TPM)'); return ok('Backup answer.'); }
+    const current = /```apn\n([\s\S]*?)```/.exec(last)?.[1] ?? 'screen_uruvakku("home"):\n    summa\n';
+    if (/REPAIR-ME/.test(last) && !/compiler rejected/.test(last)) return ok('First draft.\n```apn\n' + current.replace(/screen_uruvakku\("home"\):/, 'screen_uruvakku("home"):\n    text_kaatu("oops")') + '```');
+    if (/compiler rejected/.test(last)) return ok('Fixed the typo.\n```apn\n' + GOOD_MARK + '\n' + current.replace(/^# edited.*\n/, '') + '```');
+    if (/Explain/.test(last)) return ok('This app has a home screen with a counter.');
+    return ok('Added a marker comment.\n```apn\n' + GOOD_MARK + '\n' + current + '```');
+  });
+}).listen(8789, '127.0.0.1');
 const data = mkdtempSync(path.join(os.tmpdir(), 'apppanrom-e2e-'));
 const server = spawn('python3', ['-m', 'uvicorn', 'apppanrom.main:create_app', '--factory', '--port', String(port), '--log-level', 'warning'], {
   cwd: path.join(root, 'backend'),
-  env: { ...process.env, APPANROM_DATA_DIR: data },
+  env: { ...process.env, APPANROM_DATA_DIR: data, GROQ_API_KEY: 'gsk_e2e_fake_key_0123456789', APPANROM_AI_MAX_WAIT: '1', APPANROM_AI_BASE_URL: 'http://127.0.0.1:8789/openai/v1' },
   stdio: 'inherit',
 });
 
@@ -455,6 +479,87 @@ screen_uruvakku("two"):
     await page.getByRole('button', { name: 'Delete project' }).click();
     await page.getByRole('heading', { name: 'Computed App' }).waitFor({ state: 'detached' });
   });
+  await step('AI assistant (fake Groq): ask, validated code, diff, apply + undo, auto-repair, privacy toggle, key errors, palette', async () => {
+    await page.getByLabel('New project name').fill('AI App');
+    await page.getByRole('button', { name: 'Create project' }).click();
+    await page.getByTestId('editor').waitFor();
+    await page.getByTestId('open-ai').click();
+    const ai = page.getByTestId('ai-panel');
+    await ai.waitFor();
+    if (await page.getByTestId('ai-setup').count()) throw new Error('assistant should be configured from the environment');
+    await ai.getByText(/gpt-oss-120b/).waitFor();
+    const editorText = () => page.locator('.cm-content').innerText();
+    // 1. a normal request: the answer compiles, shows a diff, and Apply puts it in the editor (undoable)
+    await ai.getByLabel('Ask the AI').fill('please add a marker');
+    await ai.getByTestId('ai-send').click();
+    await ai.getByText('Added a marker comment.').waitFor();
+    await ai.getByText('✓ compiles').waitFor();
+    await ai.getByTestId('ai-diff').click();
+    await ai.getByLabel('Proposed changes').getByText(GOOD_MARK).waitFor();
+    const last = aiLog[aiLog.length - 1];
+    if (last.auth !== 'Bearer gsk_e2e_fake_key_0123456789') throw new Error('key not sent');
+    if (!/QUICK REFERENCE/.test(last.system) || !/CURRENT main\.apn/.test(last.last) || !/please add a marker/.test(last.last)) throw new Error('prompt is missing the reference or the code');
+    await ai.getByTestId('ai-apply').click();
+    await ai.getByText('Applied ✓').waitFor();
+    await page.waitForFunction((m) => document.querySelector('.cm-content').innerText.startsWith(m), GOOD_MARK);
+    await page.locator('.cm-content').click();
+    await page.keyboard.press('Control+z');
+    await page.waitForFunction((m) => !document.querySelector('.cm-content').innerText.startsWith(m), GOOD_MARK);
+    // 2. the first draft does not compile: the compiler's messages go back to the model and the user sees the fixed result
+    await ai.getByLabel('Ask the AI').fill('REPAIR-ME please');
+    await ai.getByTestId('ai-send').click();
+    await ai.getByText('Fixed the typo.').waitFor();
+    await ai.getByText(/auto-fixed ×1/).waitFor();
+    if (!/text_kaatu/.test(aiLog[aiLog.length - 1].last)) throw new Error('repair request did not carry the compiler problems');
+    // 3. privacy: with "Send my code" off, the code is not sent
+    await ai.getByLabel(/Send my code/).uncheck();
+    await ai.getByLabel('Ask the AI').fill('what is a card?');
+    await ai.getByTestId('ai-send').click();
+    await page.waitForFunction(() => document.querySelectorAll('.ai-msg.assistant').length >= 3);
+    if (/CURRENT main\.apn/.test(aiLog[aiLog.length - 1].last)) throw new Error('code was sent although the box was unticked');
+    await ai.getByLabel(/Send my code/).check();
+    // 4. a rejected key is explained, not a crash
+    await ai.getByLabel('Ask the AI').fill('REJECT-KEY');
+    await ai.getByTestId('ai-send').click();
+    await ai.getByText(/API key was rejected/).waitFor();
+    // 4b. Groq's per-minute limit: the panel counts down and sends the same request again by itself
+    await ai.getByLabel('Ask the AI').fill('LIMIT-ME please');
+    await ai.getByTestId('ai-send').click();
+    await ai.getByTestId('ai-wait').getByText(/per-minute limit/).waitFor();
+    await shot(page, '16-ai-wait');
+    const first = Number(await ai.getByTestId('ai-countdown').innerText());
+    if (!(first >= 1 && first <= 4)) throw new Error('countdown should be 1-4 s, was ' + first);
+    await ai.getByText('Retried fine.').waitFor({ timeout: 15000 });
+    if (aiLog.filter((x) => /LIMIT-ME/.test(x.last)).length !== 2) throw new Error('the request should have been sent exactly twice (limited, then retried)');
+    if (await ai.getByTestId('ai-wait').count()) throw new Error('the waiting card should be gone after the retry');
+    // 5. the command palette can drive it
+    const before = aiLog.length;
+    await page.keyboard.press('Control+k');
+    await page.getByLabel('Search commands').fill('explain my code');
+    await page.keyboard.press('Enter');
+    await ai.getByText('This app has a home screen with a counter.').waitFor();
+    if (aiLog.length !== before + 1) throw new Error('palette command did not send exactly one request');
+    // 5b. a longer limit: the user can choose the backup model (its limit is separate) instead of waiting
+    await ai.getByLabel('Ask the AI').fill('LIMIT-BACKUP please');
+    await ai.getByTestId('ai-send').click();
+    await ai.getByTestId('ai-wait').waitFor();
+    await ai.getByTestId('ai-backup').click();
+    await ai.getByText('Backup answer.').waitFor();
+    await ai.getByText(/Answered by gpt-oss-20b \(backup\)/).waitFor();
+    if (aiLog[aiLog.length - 1].model !== 'openai/gpt-oss-20b') throw new Error('backup model was not used');
+    await ai.getByTestId('ai-usage').waitFor();
+    // 6. the chat survives a reload (kept in this browser only)
+    await page.reload();
+    await page.getByTestId('editor').waitFor();
+    await page.getByRole('tab', { name: '✦ AI' }).click();
+    await page.getByTestId('ai-panel').getByText('This app has a home screen with a counter.').waitFor();
+    await shot(page, '15-ai-panel');
+    await page.getByRole('button', { name: 'Back to projects' }).click();
+    await page.getByRole('heading', { name: 'AI App' }).waitFor();
+    await page.locator('li.card', { hasText: 'AI App' }).getByRole('button', { name: 'Delete', exact: true }).click();
+    await page.getByRole('button', { name: 'Delete project' }).click();
+    await page.getByRole('heading', { name: 'AI App' }).waitFor({ state: 'detached' });
+  });
   await step('rename and delete (with confirmation) from the dashboard', async () => {  // (the hot-reload step already returned to the dashboard)
     await page.getByRole('button', { name: 'Rename' }).click();
     await page.getByLabel('Project name', { exact: true }).fill('Renamed App');
@@ -829,7 +934,7 @@ screen_uruvakku("home"):
   console.error(e.message);
 } finally {
   await browser?.close();
-  server.kill('SIGTERM');
+  server.kill('SIGTERM'); fakeGroq.close();
   rmSync(data, { recursive: true, force: true });
 }
 console.log(failed ? `\nE2E FAILED` : `\nE2E passed`);

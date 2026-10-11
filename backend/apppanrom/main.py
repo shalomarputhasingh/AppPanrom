@@ -22,6 +22,7 @@ from .config import Settings
 from .db import Database
 from .lang import compile_source
 from .lang.designer import DesignError, apply_op, describe, describe_app
+from .ai import AiConfig, AiError, ChatMessage, assist
 from .lang.spec import REPO_ROOT, load_spec
 from .lang.tanglish import detect_style, to_english, to_tanglish
 from .projects import MAIN_FILE, Invalid, NotFound, ProjectStore
@@ -72,6 +73,35 @@ class BuildRequest(BaseModel):
     kind: Literal["debug_apk", "release_apk", "release_aab"] = "debug_apk"
 
 
+class AiMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=8000)
+
+
+class AiDiag(BaseModel):
+    line: int = Field(ge=1, le=100_000)
+    message: str = Field(max_length=500)
+    suggestion: str | None = Field(default=None, max_length=300)
+
+
+class AiSelection(BaseModel):
+    line: int = Field(ge=1, le=100_000)
+    component: str = Field(max_length=60)
+
+
+class AiChat(BaseModel):
+    messages: list[AiMessage] = Field(min_length=1, max_length=24)
+    source: str | None = Field(default=None, max_length=200_000)   # the editor's current text; default: the saved main.apn
+    include_code: bool = True                                       # false: the code is NOT sent to the AI service
+    diagnostics: list[AiDiag] = Field(default_factory=list, max_length=30)
+    selection: AiSelection | None = None
+    on_limit: Literal["wait", "fallback"] = "wait"            # when Groq's limit is reached: wait for it to reset, or use the backup model
+
+
+class AiKey(BaseModel):
+    key: str = Field(min_length=8, max_length=300)
+
+
 class ConvertBody(BaseModel):
     source: str = Field(max_length=200_000)
     to: Literal["tanglish", "english"]
@@ -95,7 +125,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         db.close()
 
     app = FastAPI(title="AppPanrom API", version=__version__, lifespan=lifespan)
-    app.state.settings, app.state.store, app.state.builds = s, store, builds
+    ai = AiConfig(s.ai_api_key, s.ai_model, s.ai_base_url, tier=s.ai_tier, tpm=s.ai_tpm, fallback_models=s.ai_fallback_models, max_inline_wait=s.ai_max_wait_s)
+    app.state.settings, app.state.store, app.state.builds, app.state.ai = s, store, builds, ai
 
     if s.cors_origins:
         app.add_middleware(CORSMiddleware, allow_origins=s.cors_origins, allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
@@ -110,6 +141,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(ApiError)
     async def _api_error(_, e: ApiError):
+        return error_response(e.status, e.code, e.message, e.details)
+
+    @app.exception_handler(AiError)
+    async def _ai(_, e: AiError):
         return error_response(e.status, e.code, e.message, e.details)
 
     @app.exception_handler(NotFound)
@@ -147,6 +182,38 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"version": __version__, "android": check_prerequisites(s), "signing": check_signing(s),
                 "limits": {"max_file_bytes": s.max_file_bytes, "max_files_per_project": s.max_files_per_project,
                            "build_timeout_s": s.build_timeout_s}}
+
+    # ---- AI assistant (Groq). The key is never returned, stored or logged.
+    @app.get("/api/ai/status")
+    def ai_status():
+        return ai.status()
+
+    @app.post("/api/ai/key")
+    def ai_set_key(body: AiKey):
+        """Keeps a key in server memory until the backend stops (for people who did not set GROQ_API_KEY)."""
+        ai.set_session_key(body.key)
+        return ai.status()
+
+    @app.delete("/api/ai/key")
+    def ai_clear_key():
+        ai.set_session_key(None)
+        return ai.status()
+
+    @app.post("/api/projects/{project_id}/ai/chat")
+    def ai_chat(project_id: str, body: AiChat):
+        project = store.get(project_id)
+        if body.messages[-1].role != "user":
+            raise ApiError(422, "bad_request", "The last message must be from the user.")
+        source = body.source if body.source is not None else store.read_file(project_id, MAIN_FILE)
+        defaults = store.compile_defaults(project)
+
+        def check(code: str) -> tuple[bool, list[dict]]:
+            r = compile_source(code, defaults)
+            return r.ok, [d.to_dict() for d in r.diagnostics]
+
+        result = assist(ai, check, [ChatMessage(m.role, m.content) for m in body.messages], source, body.include_code,
+                        [d.model_dump() for d in body.diagnostics], body.selection.model_dump() if body.selection else None, body.on_limit)
+        return result
 
     @app.get("/api/language/spec")
     def language_spec():

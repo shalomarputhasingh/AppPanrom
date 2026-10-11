@@ -48,6 +48,7 @@ screen_uruvakku("home"):
 | **Top bar & tabs**: `navbar_uruvakku` (title, subtitle, left/centre/right, back arrow, action buttons, any look; `visible=false` removes it) and `tabbar_uruvakku` + `tab_item` bottom tabs (`screen_maathu`, no back history); Settings → Top bar & tabs applies them to every screen | ✅ |
 | **Live preview of styles**: hover a look, colour, animation or bar look in the Inspector/Settings to see it on the canvas and in the running preview (code untouched), click to apply; ▶ Replay for animations | ✅ |
 | **Workspace UX**: phone auto-fits the panel (Fit / 100%), resizable + collapsible panels remembered between visits, status bar (problems, live state, screen, vocabulary), command palette (Ctrl+K), maximise/collapse bottom panel, serialised designer edits (no lost updates) | ✅ |
+| **AI coding assistant** (Groq, `openai/gpt-oss-120b`): chat in the Studio, answers come as validated code with a diff and one-click Apply (undoable); the compiler checks every answer and the assistant auto-repairs it. **Free-plan aware**: fits the ~8K tokens/minute limit, waits for Groq's limits to reset and retries by itself, understands daily limits, optional backup model | ✅ tested against a fake Groq server; ⚠ **not yet run against the real Groq API** (no key in the build environment) |
 | **Animations** (`animate`: fade/slide/zoom/pop/bounce/shake/pulse/float/spin, duration, delay), screen transitions, press feedback; respects reduce-motion | ✅ |
 | **Fast redraws**: the screen is patched in place (unchanged subtrees skipped), so typing keeps focus and animations don't restart | ✅ measured: 7.8 → 1.2 ms per keystroke on a 450-node screen (Chromium, script time only) |
 | Studio styling UX: one-click look presets, palettes, sliders, grouped Inspector, screen themes (gradients), project templates, light/dark toggle, shortcuts help | ✅ |
@@ -221,6 +222,13 @@ Press **▶ Run** (or Ctrl+Enter) to compile and preview. Sample programs are in
 | `JAVA_HOME` | `java` on `PATH` | JDK 17+ |
 | `APPANROM_BUILD_TIMEOUT` | `900` | Seconds before a build is killed |
 | `APPANROM_KEEP_BUILD_DIRS` | `0` | `1` keeps the generated Gradle project after a build (debugging) |
+| `GROQ_API_KEY` | unset | Enables the AI assistant (get a free key at console.groq.com/keys). Kept in memory only; never stored, logged or returned. You can also paste a key in the AI panel (held until the backend stops). |
+| `APPANROM_AI_MODEL` | `openai/gpt-oss-120b` | Model used by the assistant |
+| `APPANROM_AI_TIER` | `free` | `free` plans around Groq's small per-minute token limit (compact prompt, trimmed code, small edits); `dev` uses the full language reference and whole-file answers |
+| `APPANROM_AI_TPM` | `8000` (free) | Tokens per minute to plan around (it also learns the real limit from Groq's error messages) |
+| `APPANROM_AI_FALLBACK_MODELS` | `openai/gpt-oss-20b` | Backup models (their limits are separate), used only if you pick "use backup model" in the AI panel |
+| `APPANROM_AI_MAX_WAIT` | `20` | Waits up to this many seconds happen quietly on the server; longer ones show a countdown in the Studio |
+| `APPANROM_AI_BASE_URL` | Groq | Another OpenAI-compatible endpoint (https, or http to localhost) |
 | `APPANROM_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Allowed browser origins (`*` is ignored) |
 
 Only an allow-list of environment variables (PATH, HOME, proxy settings, Java/Android locations) is passed to Gradle;
@@ -252,6 +260,19 @@ Maven Central on first build.
   (`apksigner` for APKs, `jarsigner` for bundles); an APK signed with the Android debug key is rejected as a release.
   If the verifier tool isn't installed the build is reported as *"not independently verified"*. **Back up your keystore**: you cannot update a published app without it.
 * Release builds use the same pipeline as debug builds (verified for real, see the note above).
+
+## AI assistant (Groq)
+
+Open **✦ AI** in the side panel (or Ctrl+K → "Ask the AI"). Ask for a feature, a fix or an explanation; replies include the updated `main.apn`, already compiled by
+AppPanrom's own compiler (if the first draft has errors, the compiler's messages go back to the model for up to two repair rounds). **Show changes** displays a diff,
+**Apply to editor** puts it in the editor (Ctrl+Z undoes it).
+
+* **Privacy:** your message, the recent chat and (unless you untick *Send my code*) your `main.apn` are sent to Groq. Nothing else: no keys, no other files. Chat history is kept in this browser only.
+* **Free plan:** Groq's free plan allows roughly 30 requests/minute, ~8,000 tokens/minute and daily caps per model. The assistant plans around that: a ~2,000-token language cheat-sheet,
+  the last few chat turns, only the relevant parts of big files, and small SEARCH/REPLACE edits instead of whole-file rewrites. It reads Groq's `x-ratelimit-*` / `retry-after` headers,
+  and when a limit is reached it **waits for the reset and retries by itself** (a countdown appears; short waits are invisible). A *daily* limit is reported with its reset time instead of
+  waiting for hours. Optionally choose **use backup model** (gpt-oss-20b, a separate quota) instead of waiting.
+* **Honest status:** developed and tested against a fake Groq server (headers, 429s, 413s, daily limits, repairs, edits). It has not been run against the live Groq API in the build environment because no key was available; Groq's exact limits for your account are on console.groq.com/settings/limits.
 
 ## Tests
 

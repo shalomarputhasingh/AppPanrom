@@ -29,6 +29,14 @@ class Settings:
     keystore_password: str | None = field(default=None, repr=False)
     key_alias: str | None = None
     key_password: str | None = field(default=None, repr=False)
+    # AI assistant (Groq). The key is read from the environment only, hidden from repr(), and never stored or returned.
+    ai_api_key: str | None = field(default=None, repr=False)
+    ai_model: str | None = None
+    ai_base_url: str | None = None
+    ai_tier: str | None = None                  # "free" (default: plan around Groq's small per-minute token limit) or "dev" (paid plan)
+    ai_tpm: int | None = None                   # tokens per minute to plan around (default 8000 on the free tier)
+    ai_fallback_models: list[str] | None = None  # backup models used only when the user chooses "use backup when limited"
+    ai_max_wait_s: float = 20.0                  # waits up to this long happen invisibly on the server; longer ones become a countdown in the Studio
     max_projects: int = 200
     max_files_per_project: int = 20
     max_file_bytes: int = 200_000
@@ -76,6 +84,13 @@ class Settings:
             keystore_password=env.get("APPANROM_KEYSTORE_PASSWORD"),
             key_alias=env.get("APPANROM_KEY_ALIAS"),
             key_password=env.get("APPANROM_KEY_PASSWORD") or env.get("APPANROM_KEYSTORE_PASSWORD"),
+            ai_api_key=env.get("GROQ_API_KEY"),
+            ai_model=env.get("APPANROM_AI_MODEL"),
+            ai_base_url=env.get("APPANROM_AI_BASE_URL"),
+            ai_tier=env.get("APPANROM_AI_TIER"),
+            ai_tpm=_int("APPANROM_AI_TPM", 0) or None,
+            ai_fallback_models=([m.strip() for m in env["APPANROM_AI_FALLBACK_MODELS"].split(",") if m.strip()] if "APPANROM_AI_FALLBACK_MODELS" in env else None),
+            ai_max_wait_s=float(_int("APPANROM_AI_MAX_WAIT", 20)),
             cors_origins=[o.strip() for o in origins.split(",") if o.strip() and o.strip() != "*"],
         )
 

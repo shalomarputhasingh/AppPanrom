@@ -9,6 +9,7 @@ import { Outline } from './Outline';
 import { Palette, GROUPS as PALETTE_GROUPS } from './Palette';
 import { CommandPalette, type Command } from './CommandPalette';
 import { FitStage } from './FitStage';
+import { AiPanel, type AiTask } from './AiPanel';
 import { StatusBar } from './StatusBar';
 import { Splitter, useLayout, DEFAULT_LAYOUT } from '../layout';
 import { Dialog } from './Dialog';
@@ -21,7 +22,7 @@ import { ShortcutsDialog } from './ShortcutsDialog';
 import { ThemeToggle } from './ThemeToggle';
 
 type Bottom = 'console' | 'diagnostics' | 'build' | 'inspector';
-type Side = 'files' | 'design' | 'settings' | 'reference';
+type Side = 'files' | 'design' | 'settings' | 'reference' | 'ai';
 type Mode = 'run' | 'design';
 type Sync = 'ok' | 'pending' | 'errors';
 type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
@@ -48,6 +49,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
   const [confirmExample, setConfirmExample] = useState<string | null>(null);
   const [showKeys, setShowKeys] = useState(false);
   const [palette, setPalette] = useState(false);
+  const [aiTask, setAiTask] = useState<AiTask | null>(null);
   const [lay, setLay, resetLay] = useLayout();
   const [taMessages, setTaMessages] = useState<boolean>(() => { try { return window.localStorage.getItem('apppanrom.ta') === '1'; } catch { return false; } });
   const setTa = useCallback((v: boolean) => { setTaMessages(v); try { window.localStorage.setItem('apppanrom.ta', v ? '1' : '0'); } catch { /* ignore */ } }, []);
@@ -433,6 +435,9 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
       { id: 'tab-diag', group: 'Panels', label: 'Show problems (diagnostics)', run: () => { setLay({ bottomOpen: true }); setBottom('diagnostics'); } },
       { id: 'theme', group: 'Studio', label: 'Cycle the Studio theme (auto / light / dark)', run: () => document.querySelector<HTMLButtonElement>('[data-testid=theme-toggle]')?.click() },
       { id: 'keys', group: 'Studio', label: 'Keyboard shortcuts', keys: '?', run: () => setShowKeys(true) },
+      { id: 'ai-ask', group: 'AI', label: 'Ask the AI assistant…', hint: 'Groq · GPT-OSS 120B', run: () => { setLay({ sideOpen: true }); setSide('ai'); setAiTask({ id: Date.now(), text: '', send: false }); } },
+      { id: 'ai-fix', group: 'AI', label: 'AI: fix my errors', disabled: errorCount === 0, run: () => { setLay({ sideOpen: true }); setSide('ai'); setAiTask({ id: Date.now(), text: 'Fix the compiler problems in my code.', send: true }); } },
+      { id: 'ai-explain', group: 'AI', label: 'AI: explain my code', run: () => { setLay({ sideOpen: true }); setSide('ai'); setAiTask({ id: Date.now(), text: 'Explain what my app does, screen by screen, in a few lines.', send: true }); } },
       { id: 'tanglish', group: 'Language', label: 'Convert the code to Tanglish', run: () => void convertCode('tanglish') },
       { id: 'english', group: 'Language', label: 'Convert the code to English', run: () => void convertCode('english') },
     ];
@@ -441,7 +446,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
     }
     (tree?.screens ?? []).forEach((n) => out.push({ id: `screen-${n}`, group: 'Go to screen', label: n, disabled: mode !== 'design', run: () => canvas.current?.setScreen(n) }));
     return out;
-  }, [run, doSave, enterMode, lay.sideOpen, lay.bottomOpen, mode, sync, tree, setLay, resetLay, convertCode, addFromPalette, onClose]);
+  }, [run, doSave, enterMode, lay.sideOpen, lay.bottomOpen, mode, sync, tree, setLay, resetLay, convertCode, addFromPalette, onClose, errorCount]);
 
   if (loadError) {
     return (
@@ -463,6 +468,7 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
         <button className="btn cmd-btn" onClick={() => setPalette(true)} data-testid="open-palette" title="Search every action (Ctrl+K)">
           <span aria-hidden>⌕</span> <span className="cmd-text">Search commands</span> <kbd>Ctrl K</kbd>
         </button>
+        <button className="btn" onClick={() => { setLay({ sideOpen: true }); setSide('ai'); setAiTask({ id: Date.now(), text: '', send: false }); }} data-testid="open-ai" title="Ask the AI coding assistant">✦ Ask AI</button>
         <ThemeToggle />
         <button className="btn icon" onClick={() => setShowKeys(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">⌨</button>
         <button className="btn" onClick={() => void doSave()} disabled={save === 'saved' || save === 'saving'} title="Save (Ctrl+S)">Save</button>
@@ -472,11 +478,11 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
 
       <aside className="sidebar">
         <div className="tabs" role="tablist">
-          {(['files', 'design', 'settings', 'reference'] as Side[]).map((s) => (
-            <button key={s} role="tab" aria-selected={side === s} className={side === s ? 'on' : ''} onClick={() => setSide(s)}>{s === 'reference' ? 'Docs' : s[0].toUpperCase() + s.slice(1)}</button>
+          {(['files', 'design', 'settings', 'reference', 'ai'] as Side[]).map((s) => (
+            <button key={s} role="tab" aria-selected={side === s} className={side === s ? 'on' : ''} onClick={() => setSide(s)}>{s === 'reference' ? 'Docs' : s === 'ai' ? '✦ AI' : s[0].toUpperCase() + s.slice(1)}</button>
           ))}
         </div>
-        <div className="side-body">
+        <div className="side-body" hidden={side === 'ai'}>
           {side === 'files' && (
             <>
               <ul className="files" aria-label="Project files">
@@ -512,6 +518,11 @@ export function Workspace({ projectId, onClose }: { projectId: string; onClose()
               onOp={(op) => { previewSeq.current++; window.clearTimeout(previewTimer.current); return applyDesignEdit(op, true); }} onPreview={previewOp} onConvert={convertCode} ready={sync !== 'errors'} taMessages={taMessages} setTaMessages={setTa} />
           )}
           {side === 'reference' && <ReferencePanel spec={spec} onUseExample={(c) => setConfirmExample(c)} />}
+        </div>
+        <div className="side-body ai-body" hidden={side !== 'ai'}>
+          <AiPanel projectId={projectId} getText={getText} diagnostics={diags} task={aiTask}
+            selection={mode === 'design' && nodeInfo && nodeInfo.kind === 'component' ? { line: nodeInfo.line, component: nodeInfo.component } : null}
+            onApply={(code) => { editor.current?.replaceAll(code); window.clearTimeout(valTimer.current); validate(code); log('system', 'AI suggestion applied. Ctrl+Z in the editor undoes it.'); }} />
         </div>
       </aside>
 

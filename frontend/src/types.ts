@@ -141,3 +141,34 @@ export interface DropInfo {
 
 /** A value sent to the designer: a literal (typed control) or an expression (code). */
 export type DesignInput = { literal: string | number | boolean } | { expr: string } | null;
+
+export interface AiLimits {
+  tokens_remaining: number | null; tokens_reset_in_s: number | null;
+  requests_remaining: number | null; requests_reset_in_s: number | null;
+  blocked_for_s: number; blocked_scope: 'minute' | 'day' | null;
+}
+export interface AiStatus {
+  configured: boolean; key_source: 'environment' | 'session' | null; model: string; provider: string; host: string;
+  tier: 'free' | 'dev'; tpm: number; fallback_models: string[]; limits: AiLimits;
+}
+export interface AiReply {
+  text: string;
+  code: string | null;
+  compiles: boolean | null;
+  diagnostics: Diagnostic[];
+  attempts: number;
+  model: string;
+  fallback_from: string | null;
+  mode: 'full' | 'edit';
+  trimmed: boolean;
+  waited_s: number;
+  usage: Record<string, number>;
+}
+export interface AiRequest {
+  messages: { role: 'user' | 'assistant'; content: string }[];
+  source: string;
+  include_code: boolean;
+  diagnostics: { line: number; message: string; suggestion?: string | null }[];
+  selection: { line: number; component: string } | null;
+  on_limit: 'wait' | 'fallback';
+}
