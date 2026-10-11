@@ -45,5 +45,5 @@ screen_uruvakku("home", style={"background": "#ECFDF5", "text_color": "#064E3B"}
                 text_kaattu("Lon: " + text_aakku(lon))
                 text_kaattu("Thuliyam: " + text_aakku(thuliyam) + " m")
             text_kaattu(seithi)
-        batan("Idam Edu", click_pannumbodhu=idam_edu, style={"clay": sari, "background": "#FDE68A", "text_color": "#064E3B"})
-        batan("Notification Anuppu", click_pannumbodhu=solluven, style={"clay": sari, "background": "#FBCFE8", "text_color": "#064E3B"})
+        batan("Get Location", click_pannumbodhu=idam_edu, style={"clay": sari, "background": "#FDE68A", "text_color": "#064E3B"})
+        batan("Send Notification", click_pannumbodhu=solluven, style={"clay": sari, "background": "#FBCFE8", "text_color": "#064E3B"})

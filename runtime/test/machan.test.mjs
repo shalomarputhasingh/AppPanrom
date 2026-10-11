@@ -25,7 +25,7 @@ test('machan: home screen draws with a Tanglish greeting, no errors or warnings'
 test('machan: tasks - add, tick (per-item handler args), delete, persist, celebrate', () => {
   const store = AP.memoryStorage();
   const { rt, logs, toasts, messages } = boot(src, { storage: store, namespace: 'm' });
-  press(rt, 'Velai Pattiyal');
+  press(rt, 'Tasks');
   assert.equal(rt.currentScreen(), 'velai');
   rt.fire('velai_serthu');                      // empty input -> friendly toast
   assert.ok(toasts.some((x) => /ezhudhu/.test(x)));
@@ -38,7 +38,7 @@ test('machan: tasks - add, tick (per-item handler args), delete, persist, celebr
   assert.ok(!texts(rt).some((x) => /Biryani/.test(x)));
   // a fresh app on the same storage sees the saved tasks (the app saves with data_save_pannu)
   const again = boot(src, { storage: store, namespace: 'm' });
-  press(again.rt, 'Velai Pattiyal');
+  press(again.rt, 'Tasks');
   assert.ok(texts(again.rt).some((x) => x === '[x] Amma-ku phone pannu') && texts(again.rt).some((x) => x === '[ ] Gym pogalaam'));
   press(rt, 'Mudi', 0);                          // last open task -> everything done
   assert.ok(messages.some((m) => /thalaivar/.test(m)));
@@ -47,7 +47,7 @@ test('machan: tasks - add, tick (per-item handler args), delete, persist, celebr
 
 test('machan: kaasu - totals per category, budget warning', () => {
   const { rt, logs, toasts, messages } = boot(src);
-  press(rt, 'Kaasu Kanakku');
+  press(rt, 'Expenses');
   const add = (a, cat, note) => { rt.setInputFromUI('kaasu_alavu', a); rt.setInputFromUI('kaasu_vagai', cat); rt.setInputFromUI('kaasu_note', note); rt.fire('kaasu_serthu'); };
   rt.fire('kaasu_serthu');
   assert.ok(toasts.some((x) => /amount/.test(x)));
@@ -67,7 +67,7 @@ test('machan: dialogue filter, copy, game can always be won', () => {
   const copied = [];
   const { rt, logs, messages, toasts } = boot(src);
   rt.callFunction('vaakiyam_maathu');
-  press(rt, 'Dialogue Machan');
+  press(rt, 'Dialogues');
   rt.setInputFromUI('vaakiyam_filter_input', 'kaasu');
   rt.fire('vaakiyam_filter_maathu');
   const d = texts(rt).find((x) => /kaasu|selavu|Savings/i.test(x));
@@ -124,7 +124,7 @@ test('machan: themed top bar with a Settings action, and bottom tabs that switch
   rt.fire(nav.children[0].events.click_pannumbodhu);               // the bar action opens Settings
   assert.equal(rt.currentScreen(), 'settings');
   let tabs = kids().find((k) => k.c === 'tabbar_uruvakku').children;
-  assert.deepEqual(tabs.map((t) => t.props.label), ['Home', 'Velai', 'Kaasu', 'Dialogue', 'Vilayattu']);
+  assert.deepEqual(tabs.map((t) => t.props.label), ['Home', 'Tasks', 'Expenses', 'Dialogues', 'Game']);
   rt.switchScreen('kaasu');                                        // a tab tap: replaces, no history
   assert.equal(rt.currentScreen(), 'kaasu');
   rt.goBack();                                                     // back goes to where we came from (home), not to settings

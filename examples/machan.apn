@@ -365,25 +365,25 @@ screen_uruvakku("home", style=screen_style()):
                 text_kaattu("Kaasu", style={"font_weight": "bold", "text_color": ink()})
                 text_kaattu("Rs " + text_aakku(kaasu_kootu()), style={"font_size": 28, "font_weight": "bold", "text_color": ink()})
                 progress_kaattu(kaasu_sathavigidham(), peyar="Budget Rs " + text_aakku(budget))
-        batan("Velai Pattiyal", click_pannumbodhu=go_velai, style=button_style("#C4B5FD", 0.4))
-        batan("Kaasu Kanakku", click_pannumbodhu=go_kaasu, style=button_style("#FCA5A5", 0.5))
-        batan("Dialogue Machan", click_pannumbodhu=go_vaakiyam, style=button_style("#93C5FD", 0.6))
-        batan("Vilayattu - Number Kandupidi", click_pannumbodhu=go_vilayattu, style=button_style("#F9A8D4", 0.7))
+        batan("Tasks", click_pannumbodhu=go_velai, style=button_style("#C4B5FD", 0.4))
+        batan("Expenses", click_pannumbodhu=go_kaasu, style=button_style("#FCA5A5", 0.5))
+        batan("Dialogues", click_pannumbodhu=go_vaakiyam, style=button_style("#93C5FD", 0.6))
+        batan("Game - Guess the Number", click_pannumbodhu=go_vilayattu, style=button_style("#F9A8D4", 0.7))
         batan("Settings", click_pannumbodhu=go_settings, style=button_style("#D1D5DB", 0.8))
     tabbar_uruvakku(style=bar_style()):
         tab_item("Home", icon="H", go="home")
-        tab_item("Velai", icon="V", go="velai")
-        tab_item("Kaasu", icon="K", go="kaasu")
-        tab_item("Dialogue", icon="D", go="vaakiyam")
-        tab_item("Vilayattu", icon="G", go="vilayattu")
+        tab_item("Tasks", icon="V", go="velai")
+        tab_item("Expenses", icon="K", go="kaasu")
+        tab_item("Dialogues", icon="D", go="vaakiyam")
+        tab_item("Game", icon="G", go="vilayattu")
 
 screen_uruvakku("velai", style=screen_style()):
-    screen_title("Velai Pattiyal")
+    screen_title("Tasks")
     navbar_uruvakku(style=bar_style())
     column_uruvakku(style={"padding": 20, "gap": 12}):
         card_uruvakku(style=box("#C4B5FD", 16, 0)):
             input_uruvakku("velai_input", peyar="Pudhu velai", kurippu="Enna panna pora, machan?", submit_pannumbodhu=velai_serthu)
-            batan("Serthu Kodu", click_pannumbodhu=velai_serthu, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 14})
+            batan("Add Task", click_pannumbodhu=velai_serthu, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 14})
         progress_kaattu(sathavigidham(mudinja_velai(), neelam(velaigal)), peyar=text_aakku(mudinja_velai()) + " / " + text_aakku(neelam(velaigal)) + " mudinjadhu")
         enna_na neelam(velaigal) == 0:
             text_kaattu("Innum velai onnum illa. Mela oru velai serthu da!", style={"text_color": tint(), "animate": "fade_in"})
@@ -394,16 +394,16 @@ screen_uruvakku("velai", style=screen_style()):
                     batan(thera(velaigal[i]["d"], "Thirumba", "Mudi"), click_pannumbodhu=velai_maathu(i), style={"background": "#16A34A", "text_color": "#FFFFFF", "corner_radius": 12, "width": "28%", "padding": 6, "font_size": 14})
                     batan("X", click_pannumbodhu=velai_neekku(i), style={"background": "#DC2626", "text_color": "#FFFFFF", "corner_radius": 12, "width": "14%", "padding": 6})
         enna_na neelam(velaigal) > 0:
-            batan("Ellaathaiyum Thoodai", click_pannumbodhu=velai_clear, style={"background": "#6B7280", "text_color": "#FFFFFF", "corner_radius": 14})
+            batan("Clear All", click_pannumbodhu=velai_clear, style={"background": "#6B7280", "text_color": "#FFFFFF", "corner_radius": 14})
     tabbar_uruvakku(style=bar_style()):
         tab_item("Home", icon="H", go="home")
-        tab_item("Velai", icon="V", go="velai")
-        tab_item("Kaasu", icon="K", go="kaasu")
-        tab_item("Dialogue", icon="D", go="vaakiyam")
-        tab_item("Vilayattu", icon="G", go="vilayattu")
+        tab_item("Tasks", icon="V", go="velai")
+        tab_item("Expenses", icon="K", go="kaasu")
+        tab_item("Dialogues", icon="D", go="vaakiyam")
+        tab_item("Game", icon="G", go="vilayattu")
 
 screen_uruvakku("kaasu", style=screen_style()):
-    screen_title("Kaasu Kanakku")
+    screen_title("Expenses")
     navbar_uruvakku(style=bar_style())
     column_uruvakku(style={"padding": 20, "gap": 12}):
         card_uruvakku(style=box("#FDBA74", 16, 0)):
@@ -415,7 +415,7 @@ screen_uruvakku("kaasu", style=screen_style()):
             ennai_input("kaasu_alavu", peyar="Evlo selavu (Rs)", kurippu="250")
             dropdown_uruvakku("kaasu_vagai", thervugal=vagaigal, peyar="Edhukku?", modhal="Saapadu")
             input_uruvakku("kaasu_note", peyar="Kurippu", kurippu="Biryani, auto, ...")
-            batan("Selavu Serthu", click_pannumbodhu=kaasu_serthu, style={"background": "#B91C1C", "text_color": "#FFFFFF", "corner_radius": 14})
+            batan("Add Expense", click_pannumbodhu=kaasu_serthu, style={"background": "#B91C1C", "text_color": "#FFFFFF", "corner_radius": 14})
         text_kaattu("Vagai-vaari", style={"text_color": tint(), "font_weight": "bold"})
         ovvoru k ulle dict_saavigal(vagai_kootu()):
             card_uruvakku(style=box("#FFFFFF", 10, 0)):
@@ -431,27 +431,27 @@ screen_uruvakku("kaasu", style=screen_style()):
                     batan("X", click_pannumbodhu=kaasu_neekku(i), style={"background": "#DC2626", "text_color": "#FFFFFF", "corner_radius": 12, "width": "16%"})
     tabbar_uruvakku(style=bar_style()):
         tab_item("Home", icon="H", go="home")
-        tab_item("Velai", icon="V", go="velai")
-        tab_item("Kaasu", icon="K", go="kaasu")
-        tab_item("Dialogue", icon="D", go="vaakiyam")
-        tab_item("Vilayattu", icon="G", go="vilayattu")
+        tab_item("Tasks", icon="V", go="velai")
+        tab_item("Expenses", icon="K", go="kaasu")
+        tab_item("Dialogues", icon="D", go="vaakiyam")
+        tab_item("Game", icon="G", go="vilayattu")
 
 screen_uruvakku("vaakiyam", style=screen_style()):
-    screen_title("Dialogue Machan")
+    screen_title("Dialogues")
     navbar_uruvakku(style=bar_style())
     column_uruvakku(style={"padding": 20, "gap": 14}):
         dropdown_uruvakku("vaakiyam_filter_input", thervugal=["ellaam", "ucham", "sirippu", "kaasu"], peyar="Edhu venum?", modhal=vaakiyam_filter, change_aagumbodhu=vaakiyam_filter_maathu)
         card_uruvakku(style={"background": "#FDE68A", "padding": 24, "gap": 12, "animate": thera(flip, "pop", "zoom_in"), "clay": look == "clay", "glass": look == "glass", "brutal": look == "brutal", "neumorphic": look == "soft", "corner_radius": thera(look == "clay", 32, 12)}):
             text_kaattu(vaakiyam, style={"font_size": 22, "font_weight": "bold", "text_color": thera(look == "glass", "#FFFFFF", "#3B1F6E")})
         row_uruvakku(style={"gap": 12, "justify": "space_between"}):
-            batan("Innoru Dialogue", click_pannumbodhu=vaakiyam_maathu, style=button_style("#93C5FD", 0.1))
+            batan("Another Dialogue", click_pannumbodhu=vaakiyam_maathu, style=button_style("#93C5FD", 0.1))
             batan("Copy", click_pannumbodhu=vaakiyam_copy, style=button_style("#86EFAC", 0.2))
     tabbar_uruvakku(style=bar_style()):
         tab_item("Home", icon="H", go="home")
-        tab_item("Velai", icon="V", go="velai")
-        tab_item("Kaasu", icon="K", go="kaasu")
-        tab_item("Dialogue", icon="D", go="vaakiyam")
-        tab_item("Vilayattu", icon="G", go="vilayattu")
+        tab_item("Tasks", icon="V", go="velai")
+        tab_item("Expenses", icon="K", go="kaasu")
+        tab_item("Dialogues", icon="D", go="vaakiyam")
+        tab_item("Game", icon="G", go="vilayattu")
 
 screen_uruvakku("vilayattu", style=screen_style()):
     screen_title("Number Kandupidi")
@@ -462,14 +462,14 @@ screen_uruvakku("vilayattu", style=screen_style()):
             text_kaattu("Muyarchigal: " + text_aakku(muyarchigal) + "    Best: " + thera(best == 0, "-", text_aakku(best)), style={"text_color": ink(), "font_weight": "bold"})
         card_uruvakku(style=box("#C4B5FD", 16, 0.1)):
             ennai_input("oohi_ennai", peyar="Un guess (1-20)", kurippu="10")
-            batan("Paar!", click_pannumbodhu=oohi_paar, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 14})
-        batan("Pudhu Vilayattu", click_pannumbodhu=pudhu_vilayattu, style=button_style("#86EFAC", 0.2))
+            batan("Check!", click_pannumbodhu=oohi_paar, style={"background": "#7C3AED", "text_color": "#FFFFFF", "corner_radius": 14})
+        batan("New Game", click_pannumbodhu=pudhu_vilayattu, style=button_style("#86EFAC", 0.2))
     tabbar_uruvakku(style=bar_style()):
         tab_item("Home", icon="H", go="home")
-        tab_item("Velai", icon="V", go="velai")
-        tab_item("Kaasu", icon="K", go="kaasu")
-        tab_item("Dialogue", icon="D", go="vaakiyam")
-        tab_item("Vilayattu", icon="G", go="vilayattu")
+        tab_item("Tasks", icon="V", go="velai")
+        tab_item("Expenses", icon="K", go="kaasu")
+        tab_item("Dialogues", icon="D", go="vaakiyam")
+        tab_item("Game", icon="G", go="vilayattu")
 
 screen_uruvakku("settings", style=screen_style()):
     screen_title("Settings")
@@ -484,10 +484,10 @@ screen_uruvakku("settings", style=screen_style()):
         card_uruvakku(style=box("#FDE68A", 16, 0.2)):
             text_kaattu("Machan Planner v1.0.0", style={"font_weight": "bold", "text_color": ink()})
             text_kaattu("AppPanrom-la, Tanglish-la, nanbanukaaga senjadhu.", style={"text_color": ink()})
-        batan("Ellaa Data-vum Azhi", click_pannumbodhu=ellam_azhi, style={"background": "#DC2626", "text_color": "#FFFFFF", "corner_radius": 14, "height": 52})
+        batan("Erase All Data", click_pannumbodhu=ellam_azhi, style={"background": "#DC2626", "text_color": "#FFFFFF", "corner_radius": 14, "height": 52})
     tabbar_uruvakku(style=bar_style()):
         tab_item("Home", icon="H", go="home")
-        tab_item("Velai", icon="V", go="velai")
-        tab_item("Kaasu", icon="K", go="kaasu")
-        tab_item("Dialogue", icon="D", go="vaakiyam")
-        tab_item("Vilayattu", icon="G", go="vilayattu")
+        tab_item("Tasks", icon="V", go="velai")
+        tab_item("Expenses", icon="K", go="kaasu")
+        tab_item("Dialogues", icon="D", go="vaakiyam")
+        tab_item("Game", icon="G", go="vilayattu")

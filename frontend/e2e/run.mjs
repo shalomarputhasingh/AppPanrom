@@ -253,12 +253,12 @@ screen_uruvakku("home"):
     // 1) the browser allows both
     const yes = await open({ permissions: ['geolocation', 'notifications'], geolocation: { latitude: 13.0827, longitude: 80.2707, accuracy: 25 } });
     try {
-      await yes.frame.getByRole('button', { name: 'Idam Edu' }).click();
+      await yes.frame.getByRole('button', { name: 'Get Location' }).click();
       await yes.frame.getByText('Lat: 13.0827').waitFor();
       await yes.frame.getByText('Lon: 80.2707').waitFor();
       await yes.frame.getByText('Nee inga thaan irukka machan!').waitFor();
       await shot(yes.pg, '19-location');
-      await yes.frame.getByRole('button', { name: 'Notification Anuppu' }).click();
+      await yes.frame.getByRole('button', { name: 'Send Notification' }).click();
       await yes.pg.getByRole('tab', { name: 'Console' }).click();
       await yes.pg.waitForTimeout(500);
       const consoleText = await yes.pg.getByTestId('console').innerText();
@@ -268,9 +268,9 @@ screen_uruvakku("home"):
     // 2) the browser refuses: a normal answer, never a crash
     const no = await open({ permissions: [] });
     try {
-      await no.frame.getByRole('button', { name: 'Idam Edu' }).click();
+      await no.frame.getByRole('button', { name: 'Get Location' }).click();
       await no.frame.getByText(/Permission venaam-nu sollitta/).waitFor();
-      await no.frame.getByRole('button', { name: 'Notification Anuppu' }).click();
+      await no.frame.getByRole('button', { name: 'Send Notification' }).click();
       await no.frame.getByText(/Naan Enga: Idam: 0, 0/).waitFor();          // the in-app message that replaces a blocked notification
       await shot(no.pg, '20-location-denied');
       if (no.errs.length) throw new Error('page errors: ' + no.errs.join('; '));
@@ -916,11 +916,11 @@ screen_uruvakku("home"):
     const OFFLINE_APPS = {
       kadan: async (p2) => {
         await p2.getByLabel('Kadan thogai (Rs)').fill('100000'); await p2.getByLabel('Varusha vatti (%)').fill('12'); await p2.getByLabel('Kaalam (varusham)').fill('1');
-        await p2.getByRole('button', { name: 'EMI Kanakku Pannu' }).click();
+        await p2.getByRole('button', { name: 'Calculate EMI' }).click();
         await p2.getByText('Rs 8884.88', { exact: true }).waitFor();
         await p2.waitForTimeout(700);
         await shot(p2, '21-kadan');
-        await p2.getByRole('button', { name: 'Varushathukku meedhi kadan' }).click();
+        await p2.getByRole('button', { name: 'Yearly Balance' }).click();
         await p2.getByText('Varusham 1: meedhi Rs 0').waitFor();
         await p2.getByRole('button', { name: /Back/ }).first().click();
       },
@@ -930,12 +930,12 @@ screen_uruvakku("home"):
         await p2.getByLabel('Mathippu').fill('100');
         await p2.getByLabel('Edhukku').selectOption('Fahrenheit');
         await p2.getByText('212 Fahrenheit', { exact: true }).waitFor();
-        await p2.getByRole('button', { name: 'Sevu pannu' }).click();
+        await p2.getByRole('button', { name: 'Save' }).click();
         await p2.getByText('100 Celsius = 212 Fahrenheit').waitFor();
         await shot(p2, '22-alavu');
       },
       palakkam: async (p2) => {
-        await p2.getByRole('button', { name: 'Innaiku mudichen' }).first().click();
+        await p2.getByRole('button', { name: 'Done today' }).first().click();
         await p2.getByText(/^Thodar: 1 naal/).first().waitFor();
         await p2.waitForTimeout(700);
         await shot(p2, '23-palakkam');
@@ -943,16 +943,16 @@ screen_uruvakku("home"):
       bill: async (p2) => {
         await p2.getByLabel('Bill thogai (Rs)').fill('1000'); await p2.getByLabel('Ethanai per?').fill('3');
         await p2.getByText('Rs 366.67', { exact: true }).waitFor();
-        await p2.getByRole('button', { name: 'Sevu pannu' }).click();
+        await p2.getByRole('button', { name: 'Save' }).click();
         await p2.getByText(/Rs 1000 \/ 3 per = Rs 366.67/).waitFor();
         await shot(p2, '24-bill');
       },
       padi: async (p2) => {
-        await p2.getByRole('button', { name: 'Thiruppu' }).click();
+        await p2.getByRole('button', { name: 'Flip' }).click();
         await p2.getByText('Hello / greetings').waitFor();
         await p2.waitForTimeout(700);
         await shot(p2, '25-padi');
-        await p2.getByRole('button', { name: 'Theriyum', exact: true }).click();
+        await p2.getByRole('button', { name: 'I know it', exact: true }).click();
         await p2.getByText('Nandri', { exact: true }).waitFor();
       },
     };
@@ -1091,19 +1091,19 @@ screen_uruvakku("home"):
       m.on('pageerror', (e) => errs.push(e.message));
       m.on('console', (c) => { if (c.type() === 'error' || (c.type() === 'warning' && !/vibrat|clipboard/i.test(c.text()))) errs.push(c.text()); });
       await m.goto('http://127.0.0.1:8793/assets/www/index.html');
-      await m.getByRole('button', { name: 'Velai Pattiyal' }).click();
-      for (const t of ['Biryani saapidu', 'Amma-ku phone pannu']) { await m.getByLabel('Pudhu velai').fill(t); await m.getByRole('button', { name: 'Serthu Kodu' }).click(); }
+      await m.getByRole('button', { name: 'Tasks' }).click();
+      for (const t of ['Biryani saapidu', 'Amma-ku phone pannu']) { await m.getByLabel('Pudhu velai').fill(t); await m.getByRole('button', { name: 'Add Task' }).click(); }
       await m.getByText('[ ] Amma-ku phone pannu').waitFor();
       await m.getByRole('button', { name: 'Mudi' }).nth(1).click();   // the second card's own button (handler argument)
       await m.getByText('[x] Amma-ku phone pannu').waitFor();
       await m.getByText('1 / 2 mudinjadhu').waitFor();
       await m.getByRole('button', { name: 'Back' }).click();
-      await m.getByRole('button', { name: 'Kaasu Kanakku' }).click();
+      await m.getByRole('button', { name: 'Expenses' }).click();
       await m.getByLabel('Edhukku?').selectOption('Payanam');
       await m.getByLabel('Evlo selavu (Rs)').fill('400');
       await m.getByLabel('Kurippu').fill('Bus pass');
       if ((await m.getByLabel('Edhukku?').inputValue()) !== 'Payanam') throw new Error('dropdown lost its value while typing (patching bug)');
-      await m.getByRole('button', { name: 'Selavu Serthu' }).click();
+      await m.getByRole('button', { name: 'Add Expense' }).click();
       await m.getByText('Payanam: Rs 400').waitFor();
       if ((await m.getByLabel('Edhukku?').inputValue()) !== 'Payanam') throw new Error('dropdown reset after add');
       await m.getByRole('button', { name: 'Back' }).click();
@@ -1121,7 +1121,7 @@ screen_uruvakku("home"):
       await shot(m, '11-machan-glass-dark');
       // persistence: reload keeps tasks, spending, look and dark mode
       await m.reload();
-      await m.getByRole('button', { name: 'Velai Pattiyal' }).click();
+      await m.getByRole('button', { name: 'Tasks' }).click();
       await m.getByText('[x] Amma-ku phone pannu').waitFor();
       await m.getByRole('button', { name: 'Back' }).click();
       await m.getByText('Rs 400', { exact: true }).waitFor();

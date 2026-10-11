@@ -81,7 +81,7 @@ screen_uruvakku("home", style={"background": "#F5F3FF", "text_color": "#312E81"}
             ennai_input("thogai_input", peyar="Kadan thogai (Rs)", modhal=thogai)
             ennai_input("vatti_input", peyar="Varusha vatti (%)", modhal=vatti)
             ennai_input("varusham_input", peyar="Kaalam (varusham)", modhal=varusham)
-            batan("EMI Kanakku Pannu", click_pannumbodhu=kanakku_pannu, style={"clay": sari, "background": "#FDE68A", "text_color": "#312E81", "font_weight": "bold"})
+            batan("Calculate EMI", click_pannumbodhu=kanakku_pannu, style={"clay": sari, "background": "#FDE68A", "text_color": "#312E81", "font_weight": "bold"})
         enna_na emi > 0:
             card_uruvakku(style={"clay": sari, "background": "#BBF7D0", "padding": 16, "gap": 6, "corner_radius": 26, "animate": "slide_up"}):
                 text_kaattu("Maadha EMI")
@@ -89,7 +89,7 @@ screen_uruvakku("home", style={"background": "#F5F3FF", "text_color": "#312E81"}
                 text_kaattu("Mothama kattuvadhu: " + rs(mottham))
                 text_kaattu("Vatti mattum: " + rs(mothavatti))
                 progress_kaattu(vatti_sathavigidham(), peyar="Vatti % (mottham-la)")
-            batan("Varushathukku meedhi kadan", click_pannumbodhu=pattiyal_kaattu, style={"clay": sari, "background": "#FBCFE8", "text_color": "#312E81"})
+            batan("Yearly Balance", click_pannumbodhu=pattiyal_kaattu, style={"clay": sari, "background": "#FBCFE8", "text_color": "#312E81"})
         illana:
             text_kaattu("Thogai, vatti, kaalam podu - EMI kanakku pannidalaam. Internet thevai illa.", style={"font_size": 14})
 
