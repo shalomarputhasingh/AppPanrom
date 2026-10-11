@@ -1,0 +1,124 @@
+# Tamil Padi - Tanglish <-> English flash cards for Tamil learners (and for Tamils who forgot the words :). Offline.
+# Cards you mark "theriyum" go away from the "theriyadhadhu" deck; progress is remembered on the phone.
+app_uruvakku("Tamil Padi")
+app_id_set("com.apppanrom.padi")
+app_version_set("1.0.0")
+
+mari attai = [
+    {"t": "Vanakkam", "e": "Hello / greetings", "x": "Vanakkam, eppadi irukkeenga?"},
+    {"t": "Nandri", "e": "Thank you", "x": "Romba nandri, uthavikku."},
+    {"t": "Maanbu", "e": "Respect / honour", "x": "Periyavangaluku maanbu kodu."},
+    {"t": "Thanni", "e": "Water", "x": "Konjam thanni kudungal."},
+    {"t": "Saapadu", "e": "Food / meal", "x": "Saapadu ready, vaanga."},
+    {"t": "Veedu", "e": "House / home", "x": "Veedu romba azhaga irukku."},
+    {"t": "Nanban", "e": "Friend", "x": "Avan en nalla nanban."},
+    {"t": "Amma", "e": "Mother", "x": "Amma samaikkaraanga."},
+    {"t": "Appa", "e": "Father", "x": "Appa office-ku poitaanga."},
+    {"t": "Pasi", "e": "Hunger", "x": "Enakku romba pasi."},
+    {"t": "Thookkam", "e": "Sleep", "x": "Thookkam varudhu, naalaiki paakalam."},
+    {"t": "Mazhai", "e": "Rain", "x": "Mazhai peiyudhu, kodai edu."},
+    {"t": "Veyil", "e": "Sunshine / heat", "x": "Indha veyil thaanga mudiyala."},
+    {"t": "Kaalai", "e": "Morning", "x": "Kaalai-la yezhundhukko."},
+    {"t": "Maalai", "e": "Evening", "x": "Maalai tea kudikalam."},
+    {"t": "Iravu", "e": "Night", "x": "Iravu ellam vizhichittu irundhen."},
+    {"t": "Inniki", "e": "Today", "x": "Inniki enna special?"},
+    {"t": "Naalaiki", "e": "Tomorrow", "x": "Naalaiki kandippa varuven."},
+    {"t": "Nethu", "e": "Yesterday", "x": "Nethu padam paathen."},
+    {"t": "Eppadi", "e": "How", "x": "Idhu eppadi seiyyanum?"},
+    {"t": "Yenn", "e": "Why", "x": "Yenn late-a vandha?"},
+    {"t": "Enga", "e": "Where", "x": "Bus stand enga irukku?"},
+    {"t": "Yaar", "e": "Who", "x": "Door-la yaar nikkaraanga?"},
+    {"t": "Enna", "e": "What", "x": "Idhu enna?"},
+    {"t": "Romba", "e": "Very / a lot", "x": "Romba nalla irukku."},
+    {"t": "Konjam", "e": "A little", "x": "Konjam wait pannunga."},
+    {"t": "Seekiram", "e": "Quickly", "x": "Seekiram vaanga, neram aachu."},
+    {"t": "Mella", "e": "Slowly / softly", "x": "Mella pesu, kozhandhai thoongudhu."},
+    {"t": "Paadu", "e": "Sing", "x": "Oru paatu paadu."},
+    {"t": "Sirippu", "e": "Laughter", "x": "Avan sirippu romba azhaga."},
+    {"t": "Kadhal", "e": "Love", "x": "Kadhal kavidhai ezhudhinaan."},
+    {"t": "Ooru", "e": "Town / native place", "x": "En ooru Madurai."},
+    {"t": "Pazham", "e": "Fruit", "x": "Daily oru pazham saapidu."},
+    {"t": "Kaasu", "e": "Money", "x": "Kaasu irundha thaan kadai-ku poga mudiyum."}
+]
+mari theriyum = data_edu("theriyum", [])
+mari mode = data_edu("mode", "baki")
+mari idx = 0
+mari thirupi = thappu
+mari vaakiyam = ""
+
+seyal theriyuma(i):
+    thirumbi_kudu list_irukka(theriyum, i)
+
+# the deck for the current mode: positions into `attai`
+seyal paduthu():
+    mari out = []
+    mari i = 0
+    ovvoru c in attai:
+        enna_na mode == "ellaam" allathu illaadha theriyuma(i):
+            append(out, i)
+        i = i + 1
+    thirumbi_kudu out
+
+seyal mele_idam(d):
+    enna_na neelam(d) == 0:
+        thirumbi_kudu -1
+    thirumbi_kudu d[idx % neelam(d)]
+
+seyal thirupu():
+    thirupi = sari
+
+seyal adutha():
+    idx = idx + 1
+    thirupi = thappu
+
+seyal theriyum_aachu():
+    mari d = paduthu()
+    mari p = mele_idam(d)
+    enna_na p >= 0 matrum illaadha theriyuma(p):
+        append(theriyum, p)
+        data_save_pannu("theriyum", theriyum)
+    thirupi = thappu
+
+seyal theriyala():
+    adutha()
+
+seyal mode_maathu():
+    mode = input_value("mode_input")
+    idx = 0
+    thirupi = thappu
+    data_save_pannu("mode", mode)
+
+seyal meendum():
+    theriyum = []
+    data_save_pannu("theriyum", theriyum)
+    idx = 0
+    thirupi = thappu
+
+screen_uruvakku("home", style={"background": "#FDF2F8", "text_color": "#831843"}):
+    screen_title("Tamil Padi")
+    navbar_uruvakku(thalaippu="Tamil Padi", subtitle="Flash cards", align="center", back=thappu)
+    column_uruvakku(style={"padding": 18, "gap": 12}):
+        mari d = paduthu()
+        mari p = mele_idam(d)
+        progress_kaattu(neelam(theriyum) * 100 / neelam(attai), peyar="Theriyum: " + text_aakku(neelam(theriyum)) + " / " + text_aakku(neelam(attai)))
+        dropdown_uruvakku("mode_input", thervugal=["baki", "ellaam"], peyar="Edhu kaattanum? (baki = innum theriyaadhadhu)", modhal=mode, change_aagumbodhu=mode_maathu)
+        enna_na p < 0:
+            card_uruvakku(style={"clay": sari, "background": "#BBF7D0", "padding": 22, "gap": 8, "corner_radius": 28, "animate": "pop"}):
+                thalaippu("Semma machan!")
+                text_kaattu("Ellaa vaarthaiyum theriyum. Meendum aarambikka 'Meendum' amukku.")
+            batan("Meendum", click_pannumbodhu=meendum, style={"clay": sari, "background": "#FDE68A", "text_color": "#831843"})
+        illana:
+            card_uruvakku(style={"clay": sari, "background": "#FBCFE8", "padding": 26, "gap": 10, "corner_radius": 30, "animate": "zoom_in"}):
+                text_kaattu(attai[p]["t"], style={"font_size": 36, "font_weight": "bold", "text_align": "center"})
+                enna_na thirupi:
+                    text_kaattu(attai[p]["e"], style={"font_size": 22, "text_align": "center"})
+                    text_kaattu(attai[p]["x"], style={"font_size": 14, "text_align": "center", "text_color": "#9D174D"})
+                illana:
+                    text_kaattu("Artham enna? Thiruppi paaru.", style={"text_align": "center", "text_color": "#9D174D"})
+            enna_na thirupi:
+                row_uruvakku(style={"gap": 8}):
+                    batan("Theriyum", click_pannumbodhu=theriyum_aachu, style={"clay": sari, "background": "#BBF7D0", "text_color": "#831843"})
+                    batan("Theriyala", click_pannumbodhu=theriyala, style={"clay": sari, "background": "#FECACA", "text_color": "#831843"})
+            illana:
+                batan("Thiruppu", click_pannumbodhu=thirupu, style={"clay": sari, "background": "#FDE68A", "text_color": "#831843", "font_weight": "bold"})
+            text_kaattu("Card " + text_aakku(idx % neelam(d) + 1) + " / " + text_aakku(neelam(d)), style={"text_align": "center", "font_size": 12})

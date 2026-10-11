@@ -179,3 +179,17 @@ def test_location_and_notification_app_builds_and_declares_runtime_permissions(e
     b = build(client, p["id"], "debug_apk")
     apk = artifact(client, root, b, ".apk")
     assert permissions(apk) == {"android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION", "android.permission.POST_NOTIFICATIONS"}
+
+
+def test_offline_example_builds_with_its_icon_and_no_permissions(env):
+    """The useful offline apps ship with an icon and need no permission at all (not even INTERNET)."""
+    client, root, _ = env
+    examples = Path(__file__).resolve().parents[2] / "examples"
+    p = client.post("/api/projects", json={"name": "Palakkam"}).json()
+    assert client.put(f"/api/projects/{p['id']}/files/main.apn", json={"content": (examples / "palakkam.apn").read_text(encoding="utf-8")}).status_code == 200
+    assert client.put(f"/api/projects/{p['id']}/icon", content=(examples / "palakkam-icon.png").read_bytes(), headers={"content-type": "image/png"}).status_code == 200
+    b = build(client, p["id"], "debug_apk")
+    apk = artifact(client, root, b, ".apk")
+    assert permissions(apk) == set()
+    with zipfile.ZipFile(apk) as z:
+        assert any("ic_launcher" in n for n in z.namelist())

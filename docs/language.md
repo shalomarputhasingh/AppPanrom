@@ -307,6 +307,7 @@ Aliases are intentionally avoided: there is one name per operation.
 | `text_split(text, separator)` |  |
 | `text_join(items, separator)` |  |
 | `text_contains(text, part)` |  |
+| `list_contains(list, value)` / `list_irukka` | true if the list has an item equal to `value` (compared by content) |
 | `length(list_or_dict)` |  |
 | `append(list, value)` | adds in place |
 | `remove(list, index)` | removes in place, returns removed value |
@@ -322,6 +323,8 @@ Aliases are intentionally avoided: there is one name per operation.
 | `json_encode(value) -> text` |  |
 | `json_decode(text) -> value (raises error on bad JSON)` |  |
 | `now_iso()` | current UTC time, ISO 8601 text |
+| `today_date()` / `inniki` | today's date on the phone's clock (local time) as `"YYYY-MM-DD"` |
+| `days_between(from, to)` / `naal_vithyasam` | whole days from one `"YYYY-MM-DD"` date to another (negative when `to` is earlier); an invalid date is an error |
 | `random_number(low, high)` | random integer, both ends included (not cryptographically secure) |
 | `random_choice(list)` | random item (not cryptographically secure) |
 | `input_value(name)` | current value of an input component |

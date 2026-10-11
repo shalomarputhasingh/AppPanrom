@@ -1051,6 +1051,29 @@
         "str"
       ],
       "doc": "notification_kaattu(title, text) - show a system notification (Android 13+ asks the user for permission at run time; the Studio preview asks the browser). If it is not allowed the app shows a short message instead."
+    },
+    "today_date": {
+      "min": 0,
+      "max": 0,
+      "doc": "today_date() - today's date on the phone's own clock (local time) as text \"YYYY-MM-DD\""
+    },
+    "days_between": {
+      "min": 2,
+      "max": 2,
+      "arg_types": [
+        "str",
+        "str"
+      ],
+      "doc": "days_between(from, to) - whole days from one \"YYYY-MM-DD\" date to another (negative if `to` is earlier); an invalid date is an error"
+    },
+    "list_contains": {
+      "min": 2,
+      "max": 2,
+      "arg_types": [
+        "list",
+        "any"
+      ],
+      "doc": "list_contains(list, value) - true if the list has an item equal to value (numbers, text, lists and dictionaries are compared by content)"
     }
   },
   "not_implemented": [
@@ -1171,7 +1194,10 @@
       "api_get": "api_vaangu",
       "api_post": "api_anuppu",
       "api_put": "api_maathi_anuppu",
-      "api_delete": "api_alikka"
+      "api_delete": "api_alikka",
+      "today_date": "inniki",
+      "days_between": "naal_vithyasam",
+      "list_contains": "list_irukka"
     }
   }
 }

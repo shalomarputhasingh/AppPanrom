@@ -1,0 +1,129 @@
+# Palakkam - daily habit tracker with streaks. Offline; uses today_date()/days_between() (the phone's own clock).
+# Each habit stores the dates it was done (newest first), so the streak and the weekly progress are always computed, never stale.
+app_uruvakku("Palakkam")
+app_id_set("com.apppanrom.palakkam")
+app_version_set("1.0.0")
+
+mari palakkangal = data_edu("palakkangal", [{"n": "Thanni kudi (8 glass)", "d": []}, {"n": "Nadai - 20 nimidam", "d": []}, {"n": "Pudhagam padi", "d": []}])
+mari indru = inniki()
+
+seyal sevu():
+    data_save_pannu("palakkangal", palakkangal)
+
+# the date can change while the app stays open (after midnight): refresh it whenever the user acts
+seyal naal_pudhusu():
+    indru = inniki()
+
+seyal indru_mudinjadha(p):
+    thirumbi_kudu neelam(p["d"]) > 0 matrum p["d"][0] == indru
+
+# consecutive days ending today (or yesterday, if today is not done yet)
+seyal thodar(p):
+    mari d = p["d"]
+    enna_na neelam(d) == 0:
+        thirumbi_kudu 0
+    enna_na naal_vithyasam(d[0], indru) > 1:
+        thirumbi_kudu 0
+    mari count = 1
+    mari i = 1
+    irukkura_varai i < neelam(d):
+        enna_na naal_vithyasam(d[i], d[i - 1]) == 1:
+            count = count + 1
+            i = i + 1
+        illana:
+            thirumbi_kudu count
+    thirumbi_kudu count
+
+# how many of the last 7 days (including today) were done
+seyal vaaram(p):
+    mari c = 0
+    ovvoru x in p["d"]:
+        enna_na naal_vithyasam(x, indru) < 7:
+            c = c + 1
+    thirumbi_kudu c
+
+seyal indru_ennikkai():
+    mari c = 0
+    ovvoru p in palakkangal:
+        enna_na indru_mudinjadha(p):
+            c = c + 1
+    thirumbi_kudu c
+
+seyal vaakkiyam():
+    mari total = neelam(palakkangal)
+    enna_na total == 0:
+        thirumbi_kudu "Oru palakkam serthu aarambi machan!"
+    mari c = indru_ennikkai()
+    enna_na c == total:
+        thirumbi_kudu "Semma! Innaiku ellaam mudinjuthu. Nalaiki-um adhe fire-oda vaa."
+    enna_na c == 0:
+        thirumbi_kudu "Innum onnum aarambikkala - chinna adi-yaa onnu mudichidu."
+    thirumbi_kudu "Nalla pogudhu, innum " + text_aakku(total - c) + " irukku - mudichidu!"
+
+seyal thera_sathavigidham():
+    enna_na neelam(palakkangal) == 0:
+        thirumbi_kudu 0
+    thirumbi_kudu indru_ennikkai() * 100 / neelam(palakkangal)
+
+seyal thera_niram(i):
+    enna_na indru_mudinjadha(palakkangal[i]):
+        thirumbi_kudu "#BBF7D0"
+    thirumbi_kudu "#FFEDD5"
+
+seyal thera_label(i):
+    enna_na indru_mudinjadha(palakkangal[i]):
+        thirumbi_kudu "Mudinjuthu (thirumba)"
+    thirumbi_kudu "Innaiku mudichen"
+
+seyal maathu(i):
+    naal_pudhusu()
+    mari p = palakkangal[i]
+    enna_na indru_mudinjadha(p):
+        remove(p["d"], 0)
+    illana:
+        p["d"] = [indru] + p["d"]
+        enna_na neelam(p["d"]) > 120:
+            remove(p["d"], 120)
+    sevu()
+
+seyal serkka():
+    naal_pudhusu()
+    mari peyar = text_suththam(input_value("pudhu"))
+    enna_na peyar == "":
+        toast_kaattu("Palakkathoda peyar podu")
+        thirumbi_kudu onnum_illa
+    enna_na text_neelam(peyar) > 40:
+        toast_kaattu("Peyar 40 ezhuthukkulla irukkanum")
+        thirumbi_kudu onnum_illa
+    enna_na neelam(palakkangal) >= 20:
+        toast_kaattu("20 palakkam pothum machan")
+        thirumbi_kudu onnum_illa
+    append(palakkangal, {"n": peyar, "d": []})
+    input_set("pudhu", "")
+    sevu()
+
+seyal neekku_palakkam(i):
+    remove(palakkangal, i)
+    sevu()
+
+seyal muzhusa_azhi():
+    palakkangal = []
+    sevu()
+
+screen_uruvakku("home", style={"background": "#FFF7ED", "text_color": "#7C2D12"}):
+    screen_title("Palakkam")
+    navbar_uruvakku(thalaippu="Palakkam", subtitle=indru, align="center", back=thappu)
+    column_uruvakku(style={"padding": 18, "gap": 12}):
+        card_uruvakku(style={"clay": sari, "background": "#FED7AA", "padding": 16, "gap": 8, "corner_radius": 26}):
+            text_kaattu(vaakkiyam())
+            progress_kaattu(thera_sathavigidham(), peyar="Innaiku " + text_aakku(indru_ennikkai()) + " / " + text_aakku(neelam(palakkangal)))
+        ovvoru i in range(neelam(palakkangal)):
+            card_uruvakku(style={"clay": sari, "background": thera_niram(i), "padding": 14, "gap": 6, "corner_radius": 24, "animate": "slide_up", "animate_delay": i * 0.05}):
+                text_kaattu(palakkangal[i]["n"], style={"font_weight": "bold", "font_size": 17})
+                text_kaattu("Thodar: " + text_aakku(thodar(palakkangal[i])) + " naal   |   Indha vaaram: " + text_aakku(vaaram(palakkangal[i])) + " / 7")
+                row_uruvakku(style={"gap": 8}):
+                    batan(thera_label(i), click_pannumbodhu=maathu(i), style={"clay": sari, "background": "#FDE68A", "text_color": "#7C2D12"})
+                    batan("Neekku", click_pannumbodhu=neekku_palakkam(i), style={"background": "#FECACA", "text_color": "#7C2D12"})
+        card_uruvakku(style={"padding": 12, "gap": 8}):
+            input_uruvakku("pudhu", peyar="Pudhu palakkam", kurippu="e.g. Yoga - 10 nimidam", submit_pannumbodhu=serkka)
+            batan("Serkka", click_pannumbodhu=serkka, style={"clay": sari, "background": "#FDE68A", "text_color": "#7C2D12", "font_weight": "bold"})
