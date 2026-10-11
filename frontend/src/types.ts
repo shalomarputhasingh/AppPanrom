@@ -48,6 +48,8 @@ export interface AppPermission {
   permission: string;
   reason: string;
   used_by: string[];
+  /** true: Android asks the user for this permission while the app runs (otherwise it is granted at install). */
+  runtime?: boolean;
 }
 
 export interface Build {

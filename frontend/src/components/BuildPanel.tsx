@@ -120,7 +120,7 @@ export function BuildPanel({ projectId, ensureSaved, onProblems, permissions }: 
           <p className="muted small" data-testid="permissions">
             {permissions.length === 0
               ? 'Permissions: none. The app declares no Android permissions.'
-              : <>Permissions the app will declare: {permissions.map((p) => <span key={p.permission} title={p.reason}><code>{p.permission.replace('android.permission.', '')}</code> ({p.used_by.join(', ')}) </span>)}</>}
+              : <>Permissions the app will declare: {permissions.map((p) => <span key={p.permission} title={p.reason}><code>{p.permission.replace('android.permission.', '')}</code> ({p.used_by.join(', ')}){p.runtime ? ' - asks the user when the app runs' : ''} </span>)}</>}
           </p>
         </div>
         {prereq && (

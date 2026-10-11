@@ -1,3 +1,4 @@
+from pathlib import Path
 import zipfile
 
 from fastapi.testclient import TestClient
@@ -222,3 +223,48 @@ def test_verify_apk(tmp_path):
     with zipfile.ZipFile(p, "w") as z:
         z.writestr("classes.dex", b"0" * 60000)
     assert "AndroidManifest" in verify_apk(p)
+
+
+def test_native_web_bridge_is_enabled_only_for_programs_that_make_web_requests(tmp_path):
+    from apppanrom.lang import compile_source
+
+    def features(ir, name):
+        generate_project(ir, tmp_path / name)
+        return (tmp_path / name / "app/src/main/res/values/features.xml").read_text()
+
+    # an image alone needs INTERNET but not the native bridge
+    img = compile_source('screen_uruvakku("h"):\n    image_kaattu("https://x.com/a.png")\n')
+    assert '"ap_net">false<' in features(img.ir, "img")
+    api = compile_source('function got(r):\n    debug_log(r["status"])\nfunction go():\n    api_get("https://x.com/a", "got")\n'
+                         'screen_uruvakku("h"):\n    button("b", click_pannumbodhu=go)\n')
+    assert api.ok, api.diagnostics
+    assert [p["permission"] for p in api.ir["permissions"]] == ["android.permission.INTERNET"]
+    assert '"ap_net">true<' in features(api.ir, "api")
+    js = (tmp_path / "api/app/src/main/assets/www/app.js").read_text()
+    assert "window.ApNative" in js and "__apNativeDone" in js
+    assert (tmp_path / "api/app/src/main/java/com/apppanrom/shell/NativeBridge.java").is_file()
+
+
+def test_runtime_permission_features_declare_permissions_flags_and_gps_not_required(tmp_path):
+    from apppanrom.lang import compile_source
+
+    src = (Path(__file__).resolve().parents[2] / "examples" / "idam.apn").read_text(encoding="utf-8")
+    r = compile_source(src)
+    assert r.ok, r.diagnostics
+    perms = {p["permission"]: p for p in r.ir["permissions"]}
+    assert set(perms) == {"android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION", "android.permission.POST_NOTIFICATIONS"}
+    assert all(p["runtime"] for p in perms.values())                       # all three are asked for while the app runs
+    assert perms["android.permission.POST_NOTIFICATIONS"]["used_by"] == ["notification_kaattu"]
+    generate_project(r.ir, tmp_path / "idam")
+    manifest = (tmp_path / "idam/app/src/main/AndroidManifest.xml").read_text()
+    assert 'android.hardware.location.gps" android:required="false"' in manifest
+    feats = (tmp_path / "idam/app/src/main/res/values/features.xml").read_text()
+    assert '"ap_location">true<' in feats and '"ap_notify">true<' in feats and '"ap_net">false<' in feats
+    js = (tmp_path / "idam/app/src/main/assets/www/app.js").read_text()
+    assert "N.location" in js and "N.notification" in js
+    # a program with only web requests gets neither location nor notification flags and no GPS feature lines
+    api = compile_source('function got(r):\n    debug_log(r["status"])\nfunction go():\n    api_get("https://x.com/a", "got")\nscreen_uruvakku("h"):\n    button("b", click_pannumbodhu=go)\n')
+    generate_project(api.ir, tmp_path / "api2")
+    f2 = (tmp_path / "api2/app/src/main/res/values/features.xml").read_text()
+    assert '"ap_net">true<' in f2 and '"ap_location">false<' in f2 and '"ap_notify">false<' in f2
+    assert "uses-feature" not in (tmp_path / "api2/app/src/main/AndroidManifest.xml").read_text()

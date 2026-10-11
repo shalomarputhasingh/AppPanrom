@@ -1,6 +1,7 @@
 // End-to-end test: real backend (serving the built Studio) + real Chromium. Run `npm run build` first.
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
+import { createServer as createTlsServer } from 'node:https';
 import zlib from 'node:zlib';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { existsSync, mkdtempSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
@@ -51,9 +52,26 @@ const fakeGroq = createServer((req, res) => {
   });
 }).listen(8789, '127.0.0.1');
 const data = mkdtempSync(path.join(os.tmpdir(), 'apppanrom-e2e-'));
+// A local HTTPS "web API" for the api_get / api_post step. The backend proxy normally refuses loopback addresses, so this run
+// enables APPANROM_PROXY_ALLOW_PRIVATE and trusts the throw-away certificate made here (both are off by default).
+const certKey = path.join(data, 'api-key.pem'), certFile = path.join(data, 'api-cert.pem');
+const ssl = spawnSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', certKey, '-out', certFile, '-days', '2', '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost'], { encoding: 'utf8' });
+if (ssl.status !== 0) throw new Error('openssl is needed for the e2e web-API step: ' + ssl.stderr);
+const apiLog = [];
+createTlsServer({ key: readFileSync(certKey), cert: readFileSync(certFile) }, (req, res) => {
+  let raw = '';
+  req.on('data', (c) => { raw += c; });
+  req.on('end', () => {
+    apiLog.push({ method: req.method, url: req.url, body: raw, headers: req.headers });
+    const send = (status, payload) => { res.statusCode = status; res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(payload)); };
+    if (req.url.startsWith('/weather')) return send(200, { current_weather: { temperature: 23.5, windspeed: 7 } });
+    if (req.url.startsWith('/echo')) return send(201, { got: JSON.parse(raw || 'null') });
+    send(404, { error: 'nope' });
+  });
+}).listen(8790, '127.0.0.1');
 const server = spawn('python3', ['-m', 'uvicorn', 'apppanrom.main:create_app', '--factory', '--port', String(port), '--log-level', 'warning'], {
   cwd: path.join(root, 'backend'),
-  env: { ...process.env, APPANROM_DATA_DIR: data, GROQ_API_KEY: 'gsk_e2e_fake_key_0123456789', APPANROM_AI_MAX_WAIT: '1', APPANROM_AI_BASE_URL: 'http://127.0.0.1:8789/openai/v1' },
+  env: { ...process.env, APPANROM_DATA_DIR: data, APPANROM_PROXY_ALLOW_PRIVATE: '1', APPANROM_PROXY_CA_FILE: certFile, GROQ_API_KEY: 'gsk_e2e_fake_key_0123456789', APPANROM_AI_MAX_WAIT: '1', APPANROM_AI_BASE_URL: 'http://127.0.0.1:8789/openai/v1' },
   stdio: 'inherit',
 });
 
@@ -180,6 +198,83 @@ screen_uruvakku("two"):
     await page.reload();
     await page.getByTestId('editor').waitFor();
     await page.locator('.cm-content').getByText('screen_ku_poo("two")').waitFor();
+  });
+  await step('web requests: api_get / api_post go through the Studio proxy, handler runs, errors are reported', async () => {
+    await setCode(page, `app_uruvakku("Net")
+mari temp = "-"
+mari echo = "-"
+mari miss = "-"
+function got(r):
+    temp = str(r["data"]["current_weather"]["temperature"]) + " ok=" + str(r["ok"])
+function echoed(r):
+    echo = "status " + str(r["status"]) + " " + r["text"]
+function missing(r):
+    miss = "status " + str(r["status"]) + " ok=" + str(r["ok"])
+function load():
+    api_get("https://localhost:8790/weather?city=chennai", "got")
+    api_post("https://localhost:8790/echo", {"n": 5}, "echoed")
+    api_get("https://localhost:8790/nothing", "missing")
+screen_uruvakku("home"):
+    column_uruvakku():
+        button("Load", click_pannumbodhu=load)
+        text_kaattu("t:" + temp)
+        text_kaattu("e:" + echo)
+        text_kaattu("m:" + miss)
+`);
+    await page.getByTestId('save-state').filter({ hasText: 'All changes saved' }).waitFor();
+    await page.getByTestId('run-btn').click();
+    const frame = page.frameLocator('[data-testid=preview-frame]');
+    await frame.getByRole('button', { name: 'Load' }).click();
+    await frame.getByText('t:23.5 ok=true').waitFor();
+    await frame.getByText('e:status 201 {"got":{"n":5}}').waitFor();
+    await frame.getByText('m:status 404 ok=false').waitFor();
+    const mine = apiLog.filter((r) => r.url.startsWith('/weather'));
+    if (mine.length !== 1 || mine[0].headers.cookie || mine[0].headers.authorization) throw new Error('unexpected request headers: ' + JSON.stringify(mine));
+    if (apiLog.find((r) => r.url === '/echo').body !== '{"n":5}') throw new Error('post body not forwarded');
+    await shot(page, '17-web-request');
+  });
+  await step('location + notification in the preview: the browser answers (granted and denied), the app handles both', async () => {
+    const example = readFileSync(path.join(root, 'examples', 'idam.apn'), 'utf8');
+    const open = async (ctxOptions) => {
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...ctxOptions });
+      const pg = await ctx.newPage();
+      const errs = [];
+      pg.on('pageerror', (e) => errs.push(e.message));
+      await pg.goto(base);
+      await pg.getByLabel('New project name').fill('Idam ' + Math.random().toString(36).slice(2, 6));
+      await pg.getByRole('button', { name: 'Create project' }).click();
+      await pg.getByTestId('editor').waitFor();
+      await setCode(pg, example);
+      await pg.getByTestId('save-state').filter({ hasText: 'All changes saved' }).waitFor();
+      await pg.getByTestId('run-btn').click();
+      const id = /#\/p\/(p_[0-9a-f]+)/.exec(pg.url())?.[1];
+      return { ctx, pg, errs, id, frame: pg.frameLocator('[data-testid=preview-frame]') };
+    };
+    // 1) the browser allows both
+    const yes = await open({ permissions: ['geolocation', 'notifications'], geolocation: { latitude: 13.0827, longitude: 80.2707, accuracy: 25 } });
+    try {
+      await yes.frame.getByRole('button', { name: 'Idam Edu' }).click();
+      await yes.frame.getByText('Lat: 13.0827').waitFor();
+      await yes.frame.getByText('Lon: 80.2707').waitFor();
+      await yes.frame.getByText('Nee inga thaan irukka machan!').waitFor();
+      await shot(yes.pg, '19-location');
+      await yes.frame.getByRole('button', { name: 'Notification Anuppu' }).click();
+      await yes.pg.getByRole('tab', { name: 'Console' }).click();
+      await yes.pg.waitForTimeout(500);
+      const consoleText = await yes.pg.getByTestId('console').innerText();
+      if (/notification_kaattu/.test(consoleText)) throw new Error('notification fell back although the browser allowed it: ' + consoleText);
+      if (yes.errs.length) throw new Error('page errors: ' + yes.errs.join('; '));
+    } finally { await yes.ctx.close(); await fetch(`${base}/api/projects/${yes.id}`, { method: 'DELETE' }); }
+    // 2) the browser refuses: a normal answer, never a crash
+    const no = await open({ permissions: [] });
+    try {
+      await no.frame.getByRole('button', { name: 'Idam Edu' }).click();
+      await no.frame.getByText(/Permission venaam-nu sollitta/).waitFor();
+      await no.frame.getByRole('button', { name: 'Notification Anuppu' }).click();
+      await no.frame.getByText(/Naan Enga: Idam: 0, 0/).waitFor();          // the in-app message that replaces a blocked notification
+      await shot(no.pg, '20-location-denied');
+      if (no.errs.length) throw new Error('page errors: ' + no.errs.join('; '));
+    } finally { await no.ctx.close(); await fetch(`${base}/api/projects/${no.id}`, { method: 'DELETE' }); }
   });
   await step('settings menu edits the code: app id/name, variables, screens, Tanglish conversion; bad values are refused', async () => {
     const code = () => page.locator('.cm-content').innerText();
@@ -785,6 +880,36 @@ screen_uruvakku("home"):
       if ((await p2.evaluate('window.__apBack()')) !== false) throw new Error('back handler should let Android finish on the first screen');
       await shot(p2, '06-android-bundle');
       if (errs.length) throw new Error('console errors in bundle: ' + errs.join('; '));
+    } finally { srv.close(); }
+  });
+  await step('Vaanilai (web API example) in the generated Android bundle: native bridge glue, loading state, result, error path', async () => {
+    const out = path.join(data, 'vaanilai-project');
+    const r = spawnSync('python3', ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', 'vaanilai.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
+    if (r.status !== 0) throw new Error('generate failed: ' + r.stderr);
+    if (!/"ap_net">true</.test(readFileSync(path.join(out, 'app/src/main/res/values/features.xml'), 'utf8'))) throw new Error('bridge flag missing');
+    const www = path.join(out, 'app/src/main/assets/www');
+    const srv = createServer((req, res) => {
+      const f = path.join(www, req.url.split('?')[0].replace(/^\/assets\/www\//, ''));
+      try { res.setHeader('content-type', f.endsWith('.js') ? 'text/javascript' : 'text/html'); res.end(readFileSync(f)); } catch { res.statusCode = 404; res.end(); }
+    }).listen(8798);
+    try {
+      const p2 = await browser.newPage({ viewport: { width: 390, height: 800 } });
+      const errs = [], calls = [];
+      p2.on('pageerror', (e) => errs.push(e.message));
+      await p2.exposeFunction('__nativeCall', (id, method, url, body) => { calls.push({ method, url, body }); return url.includes('latitude=9.92') ? '{"status":0,"text":"","error":"The request timed out."}' : '{"status":200,"text":"{\\"current_weather\\":{\\"temperature\\":38.2,\\"windspeed\\":11}}","error":""}'; });
+      // stand-in for the Android WebView's ApNative object: answers asynchronously through window.__apNativeDone like NativeBridge does
+      await p2.addInitScript(() => {
+        window.ApNative = { http: (id, method, url, body) => { window.__nativeCall(id, method, url, body).then((json) => setTimeout(() => window.__apNativeDone(id, json), 50)); } };
+      });
+      await p2.goto('http://127.0.0.1:8798/assets/www/index.html');
+      await p2.getByRole('button', { name: 'Chennai' }).click();
+      await p2.getByText('38.2 C').waitFor();
+      await p2.getByText('Veyil kodumai machan').waitFor();
+      await p2.getByRole('button', { name: 'Madurai' }).click();
+      await p2.getByText(/Internet illa pola machan: The request timed out/).waitFor();
+      if (calls.length !== 2 || calls[0].method !== 'GET' || !calls[0].url.startsWith('https://api.open-meteo.com/v1/forecast?latitude=13.08')) throw new Error('bad native calls ' + JSON.stringify(calls));
+      await shot(p2, '18-vaanilai');
+      if (errs.length) throw new Error('page errors: ' + errs.join('; '));
     } finally { srv.close(); }
   });
   await step('claymorphism calculator: clay shadows computed in Chromium, calculations work, pressed state', async () => {

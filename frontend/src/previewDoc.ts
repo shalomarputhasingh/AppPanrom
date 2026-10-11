@@ -28,6 +28,23 @@ export function buildPreviewDoc(ir: unknown, store: Record<string, string>, toke
     removeItem: function (k) { delete data[k]; post({ type: 'ap-store', op: 'remove', key: k }); },
     keys: function () { return Object.keys(data); }
   };
+  // The sandboxed iframe cannot reach the network or the device itself. Web requests go through the Studio's validated proxy;
+  // location and notifications are asked of the browser by the Studio page (which shows the browser's own permission prompt).
+  var pending = {}, nextId = 1;
+  function ask(type, payload, done) {
+    var id = nextId++;
+    pending[id] = done;
+    post({ type: type, id: id, req: payload });
+  }
+  function http(req, done) { ask('ap-http', req, done); }
+  function location(done) { ask('ap-location', null, done); }
+  function notify(title, text, done) { ask('ap-notify', { title: title, text: text }, done); }
+  window.addEventListener('message', function (e) {
+    var m = e.data;
+    if (e.source !== parent || !m || m.token !== TOKEN || m.type !== 'ap-reply' || !pending[m.id]) return;
+    var cb = pending[m.id]; delete pending[m.id];
+    cb(m.res);
+  });
   var ir = ${jsonForScript(ir)};
   var ctrl = null;
   // Hot reload: the Studio sends freshly compiled code; the app keeps its state and only changed components are patched.
@@ -40,6 +57,9 @@ export function buildPreviewDoc(ir: unknown, store: Record<string, string>, toke
     ctrl = AppPanrom.mount(ir, document.getElementById('app'), {
       namespace: 'preview',
       storage: storage,
+      http: http,
+      location: location,
+      notify: notify,
       log: function (level, text) { post({ type: 'ap-log', level: level, text: text }); }
     });
     post({ type: 'ap-ready' });

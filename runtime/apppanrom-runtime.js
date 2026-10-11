@@ -25,6 +25,11 @@
     storageValue: 100000, // chars per stored value
     storageTotal: 1000000, // chars per app
     keyLength: 100,
+    requests: 4, // web requests in flight at once
+    requestBody: 64000, // chars of JSON body
+    responseText: 256000, // chars of response text handed to the program
+    urlLength: 2048,
+    requestMs: 15000, // give up waiting for a response
   };
 
   // ------------------------------------------------------------------ errors / values
@@ -437,6 +442,110 @@
       device.vibrate(a[0]); return null;
     }, true);
 
+    // ---- web APIs. The program names a handler function; it runs later with {ok, status, data, text, error}.
+    // The host does the real request (Studio: validated server-side proxy, Android: native client with the same rules).
+    var inflight = 0;
+    function webRequest(fn, method, url, body, hasBody, handler) {
+      need(fn, 0, url, 'str'); need(fn, hasBody ? 2 : 1, handler, 'str');
+      if (url.length > LIMITS.urlLength) throw new ApError(fn + ': the URL is too long.');
+      if (!/^https:\/\//i.test(url)) throw new ApError(fn + ': only https:// URLs are allowed.');
+      if (!ir.functions[handler]) throw new ApError(fn + ": handler function '" + handler + "' does not exist.");
+      if (ir.functions[handler].params.length !== 1) throw new ApError(fn + ": handler '" + handler + "' must take exactly 1 parameter.");
+      if (inflight >= LIMITS.requests) throw new ApError(fn + ': too many requests at once (max ' + LIMITS.requests + '); wait for earlier ones to finish.');
+      var payload = null;
+      if (hasBody) {
+        try { payload = JSON.stringify(body); } catch (e) { throw new ApError(fn + ': the body cannot be sent as JSON (' + e.message + ').'); }
+        if (payload === undefined || payload.length > LIMITS.requestBody) throw new ApError(fn + ': the body is too large (max ' + LIMITS.requestBody + ' characters).');
+      }
+      inflight++;
+      var finished = false, timer = null;
+      function finish(res) {
+        if (finished) return;
+        finished = true; inflight--;
+        if (timer !== null) clearTimeout(timer);
+        res = res && typeof res === 'object' ? res : {};
+        var text = typeof res.text === 'string' ? res.text.slice(0, LIMITS.responseText) : '';
+        var status = typeof res.status === 'number' && isFinite(res.status) ? Math.floor(res.status) : 0;
+        var error = typeof res.error === 'string' ? res.error.slice(0, 300) : '';
+        var data = null;
+        if (!error && text) { try { data = fromJson(JSON.parse(text), 0); } catch (e) { data = null; } }
+        var out = newDict();
+        out.ok = !error && status >= 200 && status < 300;
+        out.status = status; out.data = data; out.text = text; out.error = error;
+        log('debug', fn + ' ' + url + ' -> ' + (error ? 'error: ' + error : status));
+        var target = host.current ? host.current() : rt;   // after a hot reload the new runtime answers
+        if (target && target.hasFunction(handler)) target.fire(handler, [out]);
+      }
+      if (typeof host.http === 'function') {
+        try { host.http({ method: method, url: url, body: payload }, function (r) { setTimeout(function () { finish(r); }, 0); }); }
+        catch (e) { setTimeout(function () { finish({ error: 'the request could not be started' }); }, 0); }
+      } else {
+        log('warning', fn + ': web requests are not available in this environment.');
+        setTimeout(function () { finish({ error: 'web requests are not available here' }); }, 0);
+      }
+      timer = setTimeout(function () { finish({ error: 'the request timed out' }); }, LIMITS.requestMs);
+      if (timer && typeof timer.unref === 'function') timer.unref();
+      return null;
+    }
+    def('api_get', function (a) { return webRequest('api_get', 'GET', a[0], null, false, a[1]); }, true);
+    def('api_delete', function (a) { return webRequest('api_delete', 'DELETE', a[0], null, false, a[1]); }, true);
+    def('api_post', function (a) { return webRequest('api_post', 'POST', a[0], a[1], true, a[2]); }, true);
+    def('api_put', function (a) { return webRequest('api_put', 'PUT', a[0], a[1], true, a[2]); }, true);
+
+    // ---- device features that need the user's permission at run time (location, notifications). The host asks the user;
+    // a "no" is a normal answer (denied = true), never a crash.
+    var locationBusy = false;
+    def('location_edu', function (a) {
+      var handler = need('location_edu', 0, a[0], 'str');
+      if (!ir.functions[handler]) throw new ApError("location_edu: handler function '" + handler + "' does not exist.");
+      if (ir.functions[handler].params.length !== 1) throw new ApError("location_edu: handler '" + handler + "' must take exactly 1 parameter.");
+      if (locationBusy) throw new ApError('location_edu: a location request is already running; wait for its answer.');
+      locationBusy = true;
+      var finished = false, timer = null;
+      function finish(res) {
+        if (finished) return;
+        finished = true; locationBusy = false;
+        if (timer !== null) clearTimeout(timer);
+        res = res && typeof res === 'object' ? res : {};
+        var good = !res.error && !res.denied && typeof res.lat === 'number' && typeof res.lon === 'number' && isFinite(res.lat) && isFinite(res.lon)
+          && Math.abs(res.lat) <= 90 && Math.abs(res.lon) <= 180;
+        var out = newDict();
+        out.ok = good;
+        out.lat = good ? res.lat : 0;
+        out.lon = good ? res.lon : 0;
+        out.accuracy = good && typeof res.accuracy === 'number' && isFinite(res.accuracy) ? res.accuracy : 0;
+        out.denied = !!res.denied;
+        out.error = good ? '' : (typeof res.error === 'string' && res.error ? res.error.slice(0, 300) : (res.denied ? 'Location permission was not given.' : 'The location could not be read.'));
+        log('debug', 'location_edu -> ' + (good ? 'ok' : out.error));
+        var target = host.current ? host.current() : rt;
+        if (target && target.hasFunction(handler)) target.fire(handler, [out]);
+      }
+      if (typeof host.location === 'function') {
+        try { host.location(function (r) { setTimeout(function () { finish(r); }, 0); }); }
+        catch (e) { setTimeout(function () { finish({ error: 'The location request could not be started.' }); }, 0); }
+      } else {
+        log('warning', 'location_edu: location is not available in this environment.');
+        setTimeout(function () { finish({ error: 'Location is not available here.' }); }, 0);
+      }
+      timer = setTimeout(function () { finish({ error: 'The location request timed out.' }); }, 30000);
+      if (timer && typeof timer.unref === 'function') timer.unref();
+      return null;
+    }, true);
+    def('notification_kaattu', function (a) {
+      var title = need('notification_kaattu', 0, a[0], 'str'), text = need('notification_kaattu', 1, a[1], 'str');
+      if (!title.trim()) throw new ApError('notification_kaattu needs a title.');
+      if (title.length > 100 || text.length > 500) throw new ApError('notification_kaattu: title max 100 and text max 500 characters.');
+      function fallback(why) {
+        log('warning', 'notification_kaattu: ' + why);
+        if (host.toast) host.toast(title + ': ' + text);
+      }
+      if (typeof host.notify === 'function') {
+        try { host.notify(title, text, function (r) { if (r && r.error) fallback(String(r.error).slice(0, 200)); }); }
+        catch (e) { fallback('the notification could not be shown.'); }
+      } else fallback('notifications are not available in this environment (shown as a message instead).');
+      return null;
+    }, true);
+
     def('screen_ku_poo', function (a) {
       need('screen_ku_poo', 0, a[0], 'str');
       if (!ir.screens[a[0]]) throw new ApError("Screen '" + a[0] + "' does not exist.");
@@ -792,6 +901,7 @@
       var kept = snap.stack.filter(function (n) { return ir.screens[n]; });
       if (kept.length) stack = kept;
     };
+    rt.hasFunction = function (name) { return Object.prototype.hasOwnProperty.call(ir.functions, name); };
     rt.callFunction = function (name, args) { return guarded(function () { return callUser(name, ir.functions[name], args || [], null); }); };
     rt.stdlibNames = Object.keys(STD);
     return rt;
@@ -1081,6 +1191,10 @@
       log: host.log || function () {},
       toast: function (t) { showToast(t); if (host.toast) host.toast(t); },
       message: function (t) { showMessage(t); if (host.message) host.message(t); },
+      http: host.http,
+      location: host.location,
+      notify: host.notify,
+      current: function () { return rt; },
     };
     rt = createRuntime(ir, realHost);
 

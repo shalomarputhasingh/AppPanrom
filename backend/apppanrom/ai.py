@@ -393,6 +393,8 @@ text_split(t,sep) text_join(list,sep) text_contains(t,part) length append(list,v
 min max sum round(v,digits) abs json_encode json_decode now_iso random_number(lo,hi) random_choice(list) input_value("n") input_set("n",v)
 data_save_pannu(key,v) data_edu(key,default) data_delete_pannu(key) data_clear_pannu() screen_ku_poo("s") screen_back_poo() screen_maathu("s")
 screen_data_set(k,v) screen_data_get(k,default) clipboard_copy(t) vibrate_pannu(ms)
+api_get(url,"h") api_post(url,body,"h") api_put api_delete (https only; the handler is a function NAME IN QUOTES with 1 parameter r = {ok,status,data,text,error},
+Tanglish api_vaangu/api_anuppu) location_edu("h") (r = {ok,lat,lon,accuracy,denied,error}) notification_kaattu(title,text)
 
 TANGLISH WORDS (identical program): function=seyal return=thirumbi_kudu try/catch=muyarchi/pidi in=ulle and/or/not=matrum/allathu/illaadha
 true/false/null=sari/thappu/onnum_illa title=thalaippu button=batan password_input=ragasiya_input number_input=ennai_input label/placeholder/

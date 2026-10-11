@@ -55,6 +55,8 @@ export const api = {
   aiSetKey: (key: string) => req<AiStatus>('POST', '/api/ai/key', { key }),
   aiClearKey: () => req<AiStatus>('DELETE', '/api/ai/key'),
   aiChat: (id: string, body: AiRequest, signal?: AbortSignal) => req<AiReply>('POST', `/api/projects/${id}/ai/chat`, body, signal),
+  webRequest: (method: string, url: string, body: string | null) =>
+    req<{ status: number; text: string; error: string }>('POST', '/api/proxy', { method, url, body }),
   startBuild: (id: string, kind: BuildKind) => req<Build>('POST', `/api/projects/${id}/builds`, { kind }),
   iconUrl: (id: string) => `/api/projects/${id}/icon`,
   uploadIcon: async (id: string, file: File) => {

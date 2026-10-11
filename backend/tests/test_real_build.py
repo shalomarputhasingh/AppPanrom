@@ -141,3 +141,41 @@ def test_release_apk_and_aab_are_signed_and_verified(env, project):
     if shutil.which("jarsigner"):
         out = subprocess.run(["jarsigner", "-verify", str(aab)], capture_output=True, text=True).stdout
         assert "jar verified" in out
+
+
+API_SOURCE = '''app_uruvakku("Web Build")
+app_id_set("com.apppanrom.webbuild")
+mari answer = "-"
+function got(r):
+    answer = r["text"]
+function load():
+    api_get("https://example.com/data.json", "got")
+screen_uruvakku("home"):
+    column_uruvakku():
+        text_kaattu(answer)
+        button("Load", click_pannumbodhu=load)
+'''
+
+
+def test_app_with_web_requests_builds_with_the_native_bridge(env):
+    """Compiles NativeBridge.java for real and checks the manifest: INTERNET only, no other permission."""
+    client, root, _ = env
+    p = client.post("/api/projects", json={"name": "Web Build"}).json()
+    assert client.put(f"/api/projects/{p['id']}/files/main.apn", json={"content": API_SOURCE}).status_code == 200
+    b = build(client, p["id"], "debug_apk")
+    apk = artifact(client, root, b, ".apk")
+    assert permissions(apk) == {"android.permission.INTERNET"}
+    with zipfile.ZipFile(apk) as z:
+        dex = b"".join(z.read(n) for n in z.namelist() if n.endswith(".dex"))   # the app's classes may land in classes2/3.dex
+        assert b"ApNative" in dex and b"com/apppanrom/shell/NativeBridge" in dex
+
+
+def test_location_and_notification_app_builds_and_declares_runtime_permissions(env):
+    """Compiles the location / notification code paths of NativeBridge for real (it cannot be *run* without a device)."""
+    client, root, _ = env
+    source = (Path(__file__).resolve().parents[2] / "examples" / "idam.apn").read_text(encoding="utf-8")
+    p = client.post("/api/projects", json={"name": "Idam"}).json()
+    assert client.put(f"/api/projects/{p['id']}/files/main.apn", json={"content": source}).status_code == 200
+    b = build(client, p["id"], "debug_apk")
+    apk = artifact(client, root, b, ".apk")
+    assert permissions(apk) == {"android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION", "android.permission.POST_NOTIFICATIONS"}
