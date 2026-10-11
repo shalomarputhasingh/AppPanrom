@@ -1,0 +1,101 @@
+# Kadan Kanakku - EMI / loan calculator. Fully offline (no permission, no internet), remembers your last numbers.
+# Features: number inputs, loop-based power, yearly balance table on a second screen, progress bar (interest share).
+app_uruvakku("Kadan Kanakku")
+app_id_set("com.apppanrom.kadan")
+app_version_set("1.0.0")
+
+mari thogai = data_edu("thogai", 500000)
+mari vatti = data_edu("vatti", 9)
+mari varusham = data_edu("varusham", 5)
+mari emi = 0
+mari mothavatti = 0
+mari mottham = 0
+mari pattiyal = []
+
+# (1+r)^n without a power operator
+seyal power(adi, n):
+    mari ans = 1
+    mari i = 0
+    irukkura_varai i < n:
+        ans = ans * adi
+        i = i + 1
+    thirumbi_kudu ans
+
+seyal ennai_edu(peyar, default):
+    mari v = input_value(peyar)
+    enna_na v == onnum_illa:
+        thirumbi_kudu default
+    thirumbi_kudu v
+
+seyal kanakku_pannu():
+    mari p = ennai_edu("thogai_input", 0)
+    mari rate = ennai_edu("vatti_input", 0)
+    mari years = ennai_edu("varusham_input", 0)
+    enna_na p <= 0 allathu years <= 0 allathu years > 40 allathu rate < 0 allathu rate > 60:
+        toast_kaattu("Thogai > 0, varusham 1-40, vatti 0-60 irukkanum machan")
+        thirumbi_kudu onnum_illa
+    thogai = p
+    vatti = rate
+    varusham = years
+    data_save_pannu("thogai", p)
+    data_save_pannu("vatti", rate)
+    data_save_pannu("varusham", years)
+    mari n = muzhu_ennai(years * 12)
+    mari r = rate / 12 / 100
+    enna_na r == 0:
+        emi = p / n
+    illana:
+        mari k = power(1 + r, n)
+        emi = p * r * k / (k - 1)
+    mottham = emi * n
+    mothavatti = mottham - p
+    # yearly closing balance
+    mari balance = p
+    mari m = 1
+    pattiyal = []
+    irukkura_varai m <= n:
+        balance = balance * (1 + r) - emi
+        enna_na m % 12 == 0 allathu m == n:
+            mari pb = balance
+            enna_na pb < 0:
+                pb = 0
+            append(pattiyal, "Varusham " + text_aakku(muzhu_ennai((m + 11) / 12)) + ": meedhi Rs " + text_aakku(suththam_pannu(pb, 0)))
+        m = m + 1
+
+seyal rs(v):
+    thirumbi_kudu "Rs " + text_aakku(suththam_pannu(v, 2))
+
+seyal vatti_sathavigidham():
+    enna_na mottham <= 0:
+        thirumbi_kudu 0
+    thirumbi_kudu mothavatti * 100 / mottham
+
+seyal pattiyal_kaattu():
+    screen_ku_poo("pattiyal")
+
+screen_uruvakku("home", style={"background": "#F5F3FF", "text_color": "#312E81"}):
+    screen_title("Kadan Kanakku")
+    navbar_uruvakku(thalaippu="Kadan Kanakku", subtitle="EMI calculator", align="center", back=thappu)
+    column_uruvakku(style={"padding": 18, "gap": 12}):
+        card_uruvakku(style={"clay": sari, "background": "#DDD6FE", "padding": 16, "gap": 10, "corner_radius": 26}):
+            ennai_input("thogai_input", peyar="Kadan thogai (Rs)", modhal=thogai)
+            ennai_input("vatti_input", peyar="Varusha vatti (%)", modhal=vatti)
+            ennai_input("varusham_input", peyar="Kaalam (varusham)", modhal=varusham)
+            batan("EMI Kanakku Pannu", click_pannumbodhu=kanakku_pannu, style={"clay": sari, "background": "#FDE68A", "text_color": "#312E81", "font_weight": "bold"})
+        enna_na emi > 0:
+            card_uruvakku(style={"clay": sari, "background": "#BBF7D0", "padding": 16, "gap": 6, "corner_radius": 26, "animate": "slide_up"}):
+                text_kaattu("Maadha EMI")
+                text_kaattu(rs(emi), style={"font_size": 34, "font_weight": "bold"})
+                text_kaattu("Mothama kattuvadhu: " + rs(mottham))
+                text_kaattu("Vatti mattum: " + rs(mothavatti))
+                progress_kaattu(vatti_sathavigidham(), peyar="Vatti % (mottham-la)")
+            batan("Varushathukku meedhi kadan", click_pannumbodhu=pattiyal_kaattu, style={"clay": sari, "background": "#FBCFE8", "text_color": "#312E81"})
+        illana:
+            text_kaattu("Thogai, vatti, kaalam podu - EMI kanakku pannidalaam. Internet thevai illa.", style={"font_size": 14})
+
+screen_uruvakku("pattiyal", style={"background": "#F5F3FF", "text_color": "#312E81"}):
+    screen_title("Meedhi kadan")
+    column_uruvakku(style={"padding": 18, "gap": 12}):
+        thalaippu("Meedhi kadan")
+        card_uruvakku(style={"clay": sari, "background": "#DDD6FE", "padding": 12}):
+            list_kaattu(pattiyal)

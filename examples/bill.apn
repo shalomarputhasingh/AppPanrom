@@ -1,0 +1,87 @@
+# Bill Pirichu - split a restaurant bill with tip, rounded up if you like. Offline; keeps the last splits.
+app_uruvakku("Bill Pirichu")
+app_id_set("com.apppanrom.bill")
+app_version_set("1.0.0")
+
+mari tip = data_edu("tip", 10)
+mari mele = data_edu("mele", thappu)
+mari varalaru = data_edu("varalaru", [])
+
+seyal ennai_edu(peyar, default):
+    mari v = input_value(peyar)
+    enna_na v == onnum_illa:
+        thirumbi_kudu default
+    thirumbi_kudu v
+
+seyal tip_vechchu(n):
+    tip = n
+    data_save_pannu("tip", n)
+
+seyal mele_maathu():
+    mele = input_value("mele_input")
+    data_save_pannu("mele", mele)
+
+seyal mothavillai():
+    thirumbi_kudu ennai_edu("bill_input", 0) * (1 + tip / 100)
+
+seyal oruthar():
+    mari aal = ennai_edu("aal_input", 1)
+    enna_na aal < 1:
+        thirumbi_kudu 0
+    mari v = mothavillai() / aal
+    enna_na mele:
+        # round up to the next whole rupee
+        mari w = muzhu_ennai(v)
+        enna_na w < v:
+            w = w + 1
+        thirumbi_kudu w
+    thirumbi_kudu suththam_pannu(v, 2)
+
+seyal rs(v):
+    thirumbi_kudu "Rs " + text_aakku(suththam_pannu(v, 2))
+
+seyal sevu():
+    mari bill = ennai_edu("bill_input", 0)
+    mari aal = ennai_edu("aal_input", 1)
+    enna_na bill <= 0 allathu aal < 1:
+        toast_kaattu("Bill-um aal-um sariya podu machan")
+        thirumbi_kudu onnum_illa
+    varalaru = [rs(bill) + " / " + text_aakku(muzhu_ennai(aal)) + " per = " + rs(oruthar()) + " (tip " + text_aakku(tip) + "%)"] + varalaru
+    enna_na length(varalaru) > 6:
+        remove(varalaru, 6)
+    data_save_pannu("varalaru", varalaru)
+
+seyal azhi():
+    varalaru = []
+    data_save_pannu("varalaru", varalaru)
+
+seyal tip_style(n):
+    mari s = {"clay": sari, "background": "#E5E7EB", "text_color": "#14532D"}
+    enna_na tip == n:
+        s["background"] = "#FDE68A"
+        s["font_weight"] = "bold"
+    thirumbi_kudu s
+
+screen_uruvakku("home", style={"background": "#F0FDF4", "text_color": "#14532D"}):
+    screen_title("Bill Pirichu")
+    navbar_uruvakku(thalaippu="Bill Pirichu", subtitle="Split + tip", align="center", back=thappu)
+    column_uruvakku(style={"padding": 18, "gap": 12}):
+        card_uruvakku(style={"clay": sari, "background": "#BBF7D0", "padding": 16, "gap": 10, "corner_radius": 26}):
+            ennai_input("bill_input", peyar="Bill thogai (Rs)", modhal=0)
+            ennai_input("aal_input", peyar="Ethanai per?", modhal=2)
+            text_kaattu("Tip:")
+            row_uruvakku(style={"gap": 6}):
+                batan("0%", click_pannumbodhu=tip_vechchu(0), style=tip_style(0))
+                batan("5%", click_pannumbodhu=tip_vechchu(5), style=tip_style(5))
+                batan("10%", click_pannumbodhu=tip_vechchu(10), style=tip_style(10))
+                batan("15%", click_pannumbodhu=tip_vechchu(15), style=tip_style(15))
+            toggle_uruvakku("mele_input", peyar="Mele round pannu (Rs)", modhal=mele, change_aagumbodhu=mele_maathu)
+        card_uruvakku(style={"clay": sari, "background": "#FDE68A", "padding": 16, "gap": 4, "corner_radius": 26}):
+            text_kaattu("Oruthar kodukkanum")
+            text_kaattu(rs(oruthar()), style={"font_size": 34, "font_weight": "bold"})
+            text_kaattu("Mothama (tip-oda): " + rs(mothavillai()))
+            batan("Sevu pannu", click_pannumbodhu=sevu, style={"clay": sari, "background": "#FBCFE8", "text_color": "#14532D"})
+        enna_na length(varalaru) > 0:
+            card_uruvakku(style={"padding": 8}):
+                list_kaattu(varalaru)
+            batan("Azhi", click_pannumbodhu=azhi, style={"background": "#E5E7EB", "text_color": "#14532D"})

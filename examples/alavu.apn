@@ -1,0 +1,105 @@
+# Alavu Maatru - unit converter (neelam, edai, alavu, veppam, neram, vegam). Offline, live result while you type,
+# swap button, and the last conversions are remembered on the phone.
+app_uruvakku("Alavu Maatru")
+app_id_set("com.apppanrom.alavu")
+app_version_set("1.0.0")
+
+# factor = how many of the base unit one of this unit is (base: metre, kilogram, litre, second, m/s)
+mari vagaigal = {
+    "Neelam": {"mm": 0.001, "cm": 0.01, "metre": 1, "km": 1000, "inch": 0.0254, "foot": 0.3048, "mile": 1609.344},
+    "Edai": {"gram": 0.001, "kg": 1, "quintal": 100, "tonne": 1000, "pound": 0.45359237, "ounce": 0.0283495},
+    "Alavu": {"ml": 0.001, "litre": 1, "cup": 0.2365882, "gallon (US)": 3.785412, "kudam (12 L)": 12},
+    "Neram": {"second": 1, "nimidam": 60, "mani": 3600, "naal": 86400, "vaaram": 604800},
+    "Vegam": {"m/s": 1, "km/h": 0.277778, "mph": 0.44704, "knot": 0.514444},
+    "Veppam": {"Celsius": 0, "Fahrenheit": 0, "Kelvin": 0}
+}
+mari vagai = data_edu("vagai", "Neelam")
+mari from_u = data_edu("from_u", "km")
+mari to_u = data_edu("to_u", "mile")
+mari varalaru = data_edu("varalaru", [])
+
+seyal unit_peyargal():
+    thirumbi_kudu dict_keys(vagaigal[vagai])
+
+seyal veppam_maatru(v, a, b):
+    # everything goes through Celsius
+    mari c = v
+    enna_na a == "Fahrenheit":
+        c = (v - 32) * 5 / 9
+    illana_enna a == "Kelvin":
+        c = v - 273.15
+    enna_na b == "Fahrenheit":
+        thirumbi_kudu c * 9 / 5 + 32
+    illana_enna b == "Kelvin":
+        thirumbi_kudu c + 273.15
+    thirumbi_kudu c
+
+seyal maatru(v):
+    enna_na vagai == "Veppam":
+        thirumbi_kudu veppam_maatru(v, from_u, to_u)
+    mari table = vagaigal[vagai]
+    thirumbi_kudu v * table[from_u] / table[to_u]
+
+seyal sutham(v):
+    thirumbi_kudu suththam_pannu(v, 6)
+
+seyal vagai_maathu():
+    vagai = input_value("vagai_input")
+    mari names = unit_peyargal()
+    from_u = names[0]
+    to_u = names[1]
+    data_save_pannu("vagai", vagai)
+
+seyal from_maathu():
+    from_u = input_value("from_input")
+
+seyal to_maathu():
+    to_u = input_value("to_input")
+
+seyal swap():
+    mari t = from_u
+    from_u = to_u
+    to_u = t
+
+seyal sevu():
+    mari v = input_value("alavu_input")
+    enna_na v == onnum_illa:
+        toast_kaattu("Mudhal-la oru number podu")
+        thirumbi_kudu onnum_illa
+    mari line = text_aakku(v) + " " + from_u + " = " + text_aakku(sutham(maatru(v))) + " " + to_u
+    varalaru = [line] + varalaru
+    enna_na length(varalaru) > 8:
+        remove(varalaru, 8)
+    data_save_pannu("varalaru", varalaru)
+    data_save_pannu("from_u", from_u)
+    data_save_pannu("to_u", to_u)
+    toast_kaattu("Sevu pannitten")
+
+seyal azhi():
+    varalaru = []
+    data_save_pannu("varalaru", varalaru)
+
+screen_uruvakku("home", style={"background": "#ECFEFF", "text_color": "#164E63"}):
+    screen_title("Alavu Maatru")
+    navbar_uruvakku(thalaippu="Alavu Maatru", subtitle="Offline unit converter", align="center", back=thappu)
+    column_uruvakku(style={"padding": 18, "gap": 12}):
+        card_uruvakku(style={"clay": sari, "background": "#A5F3FC", "padding": 16, "gap": 10, "corner_radius": 26}):
+            dropdown_uruvakku("vagai_input", thervugal=dict_keys(vagaigal), peyar="Edha alakkanum?", modhal=vagai, change_aagumbodhu=vagai_maathu)
+            ennai_input("alavu_input", peyar="Mathippu", modhal=1)
+            row_uruvakku(style={"gap": 8}):
+                dropdown_uruvakku("from_input", thervugal=unit_peyargal(), peyar="Edhula irundhu", modhal=from_u, change_aagumbodhu=from_maathu)
+                dropdown_uruvakku("to_input", thervugal=unit_peyargal(), peyar="Edhukku", modhal=to_u, change_aagumbodhu=to_maathu)
+            batan("Swap", click_pannumbodhu=swap, style={"clay": sari, "background": "#FDE68A", "text_color": "#164E63"})
+        card_uruvakku(style={"clay": sari, "background": "#BBF7D0", "padding": 16, "gap": 4, "corner_radius": 26}):
+            text_kaattu("Mudivu")
+            mari v = input_value("alavu_input")
+            enna_na v == onnum_illa:
+                text_kaattu("-", style={"font_size": 30, "font_weight": "bold"})
+            illana:
+                text_kaattu(text_aakku(sutham(maatru(v))) + " " + to_u, style={"font_size": 30, "font_weight": "bold"})
+            batan("Sevu pannu", click_pannumbodhu=sevu, style={"clay": sari, "background": "#FBCFE8", "text_color": "#164E63"})
+        enna_na length(varalaru) > 0:
+            text_kaattu("Sameepathiya maatrangal", style={"font_weight": "bold"})
+            card_uruvakku(style={"padding": 8}):
+                list_kaattu(varalaru)
+            batan("Azhi", click_pannumbodhu=azhi, style={"background": "#E5E7EB", "text_color": "#164E63"})

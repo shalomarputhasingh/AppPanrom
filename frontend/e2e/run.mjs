@@ -912,6 +912,85 @@ screen_uruvakku("home"):
       if (errs.length) throw new Error('page errors: ' + errs.join('; '));
     } finally { srv.close(); }
   });
+  await step('useful offline apps (EMI, units, habits, bill split, flash cards): real bundles in Chromium, no network requests, state survives a reload', async () => {
+    const OFFLINE_APPS = {
+      kadan: async (p2) => {
+        await p2.getByLabel('Kadan thogai (Rs)').fill('100000'); await p2.getByLabel('Varusha vatti (%)').fill('12'); await p2.getByLabel('Kaalam (varusham)').fill('1');
+        await p2.getByRole('button', { name: 'EMI Kanakku Pannu' }).click();
+        await p2.getByText('Rs 8884.88', { exact: true }).waitFor();
+        await p2.waitForTimeout(700);
+        await shot(p2, '21-kadan');
+        await p2.getByRole('button', { name: 'Varushathukku meedhi kadan' }).click();
+        await p2.getByText('Varusham 1: meedhi Rs 0').waitFor();
+        await p2.getByRole('button', { name: /Back/ }).first().click();
+      },
+      alavu: async (p2) => {
+        await p2.getByText('0.621371 mile', { exact: true }).waitFor();
+        await p2.getByLabel('Edha alakkanum?').selectOption('Veppam');
+        await p2.getByLabel('Mathippu').fill('100');
+        await p2.getByLabel('Edhukku').selectOption('Fahrenheit');
+        await p2.getByText('212 Fahrenheit', { exact: true }).waitFor();
+        await p2.getByRole('button', { name: 'Sevu pannu' }).click();
+        await p2.getByText('100 Celsius = 212 Fahrenheit').waitFor();
+        await shot(p2, '22-alavu');
+      },
+      palakkam: async (p2) => {
+        await p2.getByRole('button', { name: 'Innaiku mudichen' }).first().click();
+        await p2.getByText(/^Thodar: 1 naal/).first().waitFor();
+        await p2.waitForTimeout(700);
+        await shot(p2, '23-palakkam');
+      },
+      bill: async (p2) => {
+        await p2.getByLabel('Bill thogai (Rs)').fill('1000'); await p2.getByLabel('Ethanai per?').fill('3');
+        await p2.getByText('Rs 366.67', { exact: true }).waitFor();
+        await p2.getByRole('button', { name: 'Sevu pannu' }).click();
+        await p2.getByText(/Rs 1000 \/ 3 per = Rs 366.67/).waitFor();
+        await shot(p2, '24-bill');
+      },
+      padi: async (p2) => {
+        await p2.getByRole('button', { name: 'Thiruppu' }).click();
+        await p2.getByText('Hello / greetings').waitFor();
+        await p2.waitForTimeout(700);
+        await shot(p2, '25-padi');
+        await p2.getByRole('button', { name: 'Theriyum', exact: true }).click();
+        await p2.getByText('Nandri', { exact: true }).waitFor();
+      },
+    };
+    const AFTER_RELOAD = {
+      kadan: async (p2) => { if ((await p2.getByLabel('Kadan thogai (Rs)').inputValue()) !== '100000') throw new Error('kadan did not remember its numbers'); },
+      alavu: async (p2) => { await p2.getByText('100 Celsius = 212 Fahrenheit').waitFor(); },
+      palakkam: async (p2) => { await p2.getByText(/^Thodar: 1 naal/).first().waitFor(); },
+      bill: async (p2) => { await p2.getByText(/Rs 1000 \/ 3 per/).waitFor(); },
+      padi: async (p2) => { await p2.getByText('Nandri', { exact: true }).waitFor().catch(() => undefined); await p2.getByText(/Theriyum: 1 \/ 34/).waitFor(); },
+    };
+    for (const name of Object.keys(OFFLINE_APPS)) {
+      const out = path.join(data, name + '-project');
+      const r = spawnSync('python3', ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', name + '.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
+      if (r.status !== 0) throw new Error(name + ': generate failed: ' + r.stderr);
+      const manifest = readFileSync(path.join(out, 'app/src/main/AndroidManifest.xml'), 'utf8');
+      if (/INTERNET/.test(manifest) || /ap_net">true/.test(readFileSync(path.join(out, 'app/src/main/res/values/features.xml'), 'utf8'))) throw new Error(name + ' should not declare INTERNET');
+      const www = path.join(out, 'app/src/main/assets/www');
+      const srv = createServer((req, res) => {
+        const f = path.join(www, req.url.split('?')[0].replace(/^\/assets\/www\//, ''));
+        try { res.setHeader('content-type', f.endsWith('.js') ? 'text/javascript' : 'text/html'); res.end(readFileSync(f)); } catch { res.statusCode = 404; res.end(); }
+      }).listen(8797);
+      try {
+        const ctx = await browser.newContext({ viewport: { width: 390, height: 800 } });
+        const external = [];
+        await ctx.route('**/*', (route) => { const u = new URL(route.request().url()); if (u.hostname === '127.0.0.1' || u.protocol === 'data:') return route.continue(); external.push(route.request().url()); return route.abort(); });
+        const p2 = await ctx.newPage();
+        const errs = [];
+        p2.on('pageerror', (e) => errs.push(e.message));
+        await p2.goto('http://127.0.0.1:8797/assets/www/index.html');
+        await OFFLINE_APPS[name](p2);
+        await p2.reload();
+        await AFTER_RELOAD[name](p2);
+        if (external.length) throw new Error(name + ' made network requests: ' + external.join(', '));
+        if (errs.length) throw new Error(name + ' page errors: ' + errs.join('; '));
+        await ctx.close();
+      } finally { srv.close(); }
+    }
+  });
   await step('claymorphism calculator: clay shadows computed in Chromium, calculations work, pressed state', async () => {
     const out = path.join(data, 'calc-project');
     const r = spawnSync('python3', ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', 'calculator.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });

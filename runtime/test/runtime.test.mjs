@@ -533,3 +533,27 @@ test('notification_kaattu calls the host; when it fails or is missing the user s
   assert.deepEqual(none, ['Vanakkam: Naan dhaan notification']);
   assert.throws(() => c.rt.callFunction('untitled', []), /needs a title/);
 });
+
+test('today_date is the local date and days_between counts whole days (leap years, month ends, negatives, bad input)', () => {
+  const src = (body) => `function f():\n    ${body}\nscreen_uruvakku("home"):\n    title("x")\n`;
+  const run = (expr) => { const { rt } = boot(`mari out = ${expr}\nscreen_uruvakku("home"):\n    title("x")\n`); return rt.globals.get('out'); };
+  assert.match(run('today_date()'), /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(run('days_between("2024-02-28", "2024-03-01")'), 2);       // 2024 is a leap year
+  assert.equal(run('days_between("2023-02-28", "2023-03-01")'), 1);
+  assert.equal(run('days_between("2024-12-31", "2025-01-01")'), 1);
+  assert.equal(run('days_between("2025-01-10", "2025-01-03")'), -7);
+  assert.equal(run('days_between("2025-05-05", "2025-05-05")'), 0);
+  assert.equal(run('naal_vithyasam("2025-01-01", "2025-12-31")'), 364);
+  assert.throws(() => boot(src('days_between("2025-02-30", "2025-03-01")')).rt.callFunction('f', []), /not a real date/);
+  assert.throws(() => boot(src('days_between("yesterday", "2025-03-01")')).rt.callFunction('f', []), /not a date/);
+});
+
+test('list_contains compares by content', () => {
+  const run = (expr) => boot(`mari out = ${expr}\nscreen_uruvakku("home"):\n    title("x")\n`).rt.globals.get('out');
+  assert.equal(run('list_contains([1, 2, 3], 2)'), true);
+  assert.equal(run('list_contains([1, 2, 3], 4)'), false);
+  assert.equal(run('list_contains(["a", [1, 2], {"k": 1}], [1, 2])'), true);
+  assert.equal(run('list_contains(["a", [1, 2], {"k": 1}], {"k": 1})'), true);
+  assert.equal(run('list_irukka([], 1)'), false);
+  assert.equal(run('list_contains(["1"], 1)'), false);
+});

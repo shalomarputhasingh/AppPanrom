@@ -331,6 +331,12 @@
     });
     def('text_contains', function (a) { return need('text_contains', 0, a[0], 'str').indexOf(need('text_contains', 1, a[1], 'str')) >= 0; });
 
+    def('list_contains', function (a) {
+      need('list_contains', 0, a[0], 'list');
+      for (var i = 0; i < a[0].length; i++) if (deepEqual(a[0][i], a[1])) return true;
+      return false;
+    });
+
     def('length', function (a) {
       var v = a[0];
       if (Array.isArray(v)) return v.length;
@@ -399,6 +405,23 @@
       }
     });
     def('now_iso', function () { return new Date().toISOString(); });
+    function pad2(n) { return (n < 10 ? '0' : '') + n; }
+    function dayNumber(fn, s) {
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+      if (!m) throw new ApError(fn + ': "' + String(s).slice(0, 30) + '" is not a date like 2025-03-31.');
+      var y = +m[1], mo = +m[2], d = +m[3], ms = Date.UTC(y, mo - 1, d);
+      var chk = new Date(ms);
+      if (chk.getUTCFullYear() !== y || chk.getUTCMonth() !== mo - 1 || chk.getUTCDate() !== d) throw new ApError(fn + ': ' + s + ' is not a real date.');
+      return Math.round(ms / 86400000);
+    }
+    def('today_date', function () {
+      var d = new Date();
+      return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+    });
+    def('days_between', function (a) {
+      need('days_between', 0, a[0], 'str'); need('days_between', 1, a[1], 'str');
+      return dayNumber('days_between', a[1]) - dayNumber('days_between', a[0]);
+    });
     def('random_number', function (a) {
       need('random_number', 0, a[0], 'num'); need('random_number', 1, a[1], 'num');
       if (!Number.isInteger(a[0]) || !Number.isInteger(a[1]) || a[0] > a[1]) throw new ApError('random_number needs whole numbers with low <= high.');
