@@ -72,8 +72,8 @@ seyal thera_niram(i):
 
 seyal thera_label(i):
     enna_na indru_mudinjadha(palakkangal[i]):
-        thirumbi_kudu "Mudinjuthu (thirumba)"
-    thirumbi_kudu "Innaiku mudichen"
+        thirumbi_kudu "Done (tap to undo)"
+    thirumbi_kudu "Done today"
 
 seyal maathu(i):
     naal_pudhusu()
@@ -123,7 +123,7 @@ screen_uruvakku("home", style={"background": "#FFF7ED", "text_color": "#7C2D12"}
                 text_kaattu("Thodar: " + text_aakku(thodar(palakkangal[i])) + " naal   |   Indha vaaram: " + text_aakku(vaaram(palakkangal[i])) + " / 7")
                 row_uruvakku(style={"gap": 8}):
                     batan(thera_label(i), click_pannumbodhu=maathu(i), style={"clay": sari, "background": "#FDE68A", "text_color": "#7C2D12"})
-                    batan("Neekku", click_pannumbodhu=neekku_palakkam(i), style={"background": "#FECACA", "text_color": "#7C2D12"})
+                    batan("Delete", click_pannumbodhu=neekku_palakkam(i), style={"background": "#FECACA", "text_color": "#7C2D12"})
         card_uruvakku(style={"padding": 12, "gap": 8}):
             input_uruvakku("pudhu", peyar="Pudhu palakkam", kurippu="e.g. Yoga - 10 nimidam", submit_pannumbodhu=serkka)
-            batan("Serkka", click_pannumbodhu=serkka, style={"clay": sari, "background": "#FDE68A", "text_color": "#7C2D12", "font_weight": "bold"})
+            batan("Add", click_pannumbodhu=serkka, style={"clay": sari, "background": "#FDE68A", "text_color": "#7C2D12", "font_weight": "bold"})

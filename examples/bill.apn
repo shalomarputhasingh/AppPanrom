@@ -80,8 +80,8 @@ screen_uruvakku("home", style={"background": "#F0FDF4", "text_color": "#14532D"}
             text_kaattu("Oruthar kodukkanum")
             text_kaattu(rs(oruthar()), style={"font_size": 34, "font_weight": "bold"})
             text_kaattu("Mothama (tip-oda): " + rs(mothavillai()))
-            batan("Sevu pannu", click_pannumbodhu=sevu, style={"clay": sari, "background": "#FBCFE8", "text_color": "#14532D"})
+            batan("Save", click_pannumbodhu=sevu, style={"clay": sari, "background": "#FBCFE8", "text_color": "#14532D"})
         enna_na length(varalaru) > 0:
             card_uruvakku(style={"padding": 8}):
                 list_kaattu(varalaru)
-            batan("Azhi", click_pannumbodhu=azhi, style={"background": "#E5E7EB", "text_color": "#14532D"})
+            batan("Clear", click_pannumbodhu=azhi, style={"background": "#E5E7EB", "text_color": "#14532D"})

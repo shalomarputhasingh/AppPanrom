@@ -106,7 +106,7 @@ screen_uruvakku("home", style={"background": "#FDF2F8", "text_color": "#831843"}
             card_uruvakku(style={"clay": sari, "background": "#BBF7D0", "padding": 22, "gap": 8, "corner_radius": 28, "animate": "pop"}):
                 thalaippu("Semma machan!")
                 text_kaattu("Ellaa vaarthaiyum theriyum. Meendum aarambikka 'Meendum' amukku.")
-            batan("Meendum", click_pannumbodhu=meendum, style={"clay": sari, "background": "#FDE68A", "text_color": "#831843"})
+            batan("Restart", click_pannumbodhu=meendum, style={"clay": sari, "background": "#FDE68A", "text_color": "#831843"})
         illana:
             card_uruvakku(style={"clay": sari, "background": "#FBCFE8", "padding": 26, "gap": 10, "corner_radius": 30, "animate": "zoom_in"}):
                 text_kaattu(attai[p]["t"], style={"font_size": 36, "font_weight": "bold", "text_align": "center"})
@@ -117,8 +117,8 @@ screen_uruvakku("home", style={"background": "#FDF2F8", "text_color": "#831843"}
                     text_kaattu("Artham enna? Thiruppi paaru.", style={"text_align": "center", "text_color": "#9D174D"})
             enna_na thirupi:
                 row_uruvakku(style={"gap": 8}):
-                    batan("Theriyum", click_pannumbodhu=theriyum_aachu, style={"clay": sari, "background": "#BBF7D0", "text_color": "#831843"})
-                    batan("Theriyala", click_pannumbodhu=theriyala, style={"clay": sari, "background": "#FECACA", "text_color": "#831843"})
+                    batan("I know it", click_pannumbodhu=theriyum_aachu, style={"clay": sari, "background": "#BBF7D0", "text_color": "#831843"})
+                    batan("Don't know", click_pannumbodhu=theriyala, style={"clay": sari, "background": "#FECACA", "text_color": "#831843"})
             illana:
-                batan("Thiruppu", click_pannumbodhu=thirupu, style={"clay": sari, "background": "#FDE68A", "text_color": "#831843", "font_weight": "bold"})
+                batan("Flip", click_pannumbodhu=thirupu, style={"clay": sari, "background": "#FDE68A", "text_color": "#831843", "font_weight": "bold"})
             text_kaattu("Card " + text_aakku(idx % neelam(d) + 1) + " / " + text_aakku(neelam(d)), style={"text_align": "center", "font_size": 12})

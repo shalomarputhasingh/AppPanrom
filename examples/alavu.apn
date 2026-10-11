@@ -73,7 +73,7 @@ seyal sevu():
     data_save_pannu("varalaru", varalaru)
     data_save_pannu("from_u", from_u)
     data_save_pannu("to_u", to_u)
-    toast_kaattu("Sevu pannitten")
+    toast_kaattu("Saved")
 
 seyal azhi():
     varalaru = []
@@ -97,9 +97,9 @@ screen_uruvakku("home", style={"background": "#ECFEFF", "text_color": "#164E63"}
                 text_kaattu("-", style={"font_size": 30, "font_weight": "bold"})
             illana:
                 text_kaattu(text_aakku(sutham(maatru(v))) + " " + to_u, style={"font_size": 30, "font_weight": "bold"})
-            batan("Sevu pannu", click_pannumbodhu=sevu, style={"clay": sari, "background": "#FBCFE8", "text_color": "#164E63"})
+            batan("Save", click_pannumbodhu=sevu, style={"clay": sari, "background": "#FBCFE8", "text_color": "#164E63"})
         enna_na length(varalaru) > 0:
             text_kaattu("Sameepathiya maatrangal", style={"font_weight": "bold"})
             card_uruvakku(style={"padding": 8}):
                 list_kaattu(varalaru)
-            batan("Azhi", click_pannumbodhu=azhi, style={"background": "#E5E7EB", "text_color": "#164E63"})
+            batan("Clear", click_pannumbodhu=azhi, style={"background": "#E5E7EB", "text_color": "#164E63"})
