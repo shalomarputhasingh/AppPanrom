@@ -3,7 +3,7 @@ import type { LogLine } from '../types';
 
 export function ConsolePanel({ lines, onClear }: { lines: LogLine[]; onClear(): void }) {
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => end.current?.scrollIntoView?.({ block: 'end' }), [lines.length]);
+  useEffect(() => { end.current?.scrollIntoView?.({ block: 'end' }); }, [lines.length]);
   return (
     <div className="panel-body">
       <div className="panel-tools"><button className="btn small" onClick={onClear}>Clear</button></div>

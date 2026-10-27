@@ -8,12 +8,12 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
   const [i, setI] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLUListElement>(null);
-  useEffect(() => input.current?.focus(), []);
+  useEffect(() => { input.current?.focus(); }, []);
   const shown = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
     return commands.filter((c) => !c.disabled && words.every((w) => `${c.group} ${c.label} ${c.hint ?? ''}`.toLowerCase().includes(w)));
   }, [commands, q]);
-  useEffect(() => setI(0), [q]);
+  useEffect(() => { setI(0); }, [q]);
   useEffect(() => { (list.current?.children[i] as HTMLElement | undefined)?.scrollIntoView({ block: 'nearest' }); }, [i]);
   const go = (c?: Command) => { if (!c) return; onClose(); setTimeout(c.run, 0); };
   return (

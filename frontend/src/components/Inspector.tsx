@@ -34,7 +34,7 @@ function CommitInput({ value, onCommit, disabled, type = 'text', mono, ...rest }
   value: string; onCommit(v: string): void; disabled?: boolean; type?: string; mono?: boolean; placeholder?: string; 'aria-label': string; min?: number; max?: number; step?: number;
 }) {
   const [v, setV] = useState(value);
-  useEffect(() => setV(value), [value]);
+  useEffect(() => { setV(value); }, [value]);
   const commit = () => { if (v !== value) onCommit(v); };
   return (
     <input

@@ -72,7 +72,7 @@ export function BuildPanel({ projectId, ensureSaved, onProblems, permissions }: 
     return () => { stop = true; window.clearTimeout(timer); };
   }, [selected, active]);
 
-  useEffect(() => logEnd.current?.scrollTo?.({ top: logEnd.current.scrollHeight }), [log]);
+  useEffect(() => { logEnd.current?.scrollTo?.({ top: logEnd.current.scrollHeight }); }, [log]);
 
   const start = async () => {
     setError(null);

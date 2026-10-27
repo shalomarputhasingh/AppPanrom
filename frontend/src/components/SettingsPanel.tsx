@@ -20,7 +20,7 @@ interface Props {
 
 function Commit({ value, onCommit, disabled, label, mono, placeholder }: { value: string; onCommit(v: string): void; disabled?: boolean; label: string; mono?: boolean; placeholder?: string }) {
   const [v, setV] = useState(value);
-  useEffect(() => setV(value), [value]);
+  useEffect(() => { setV(value); }, [value]);
   const done = () => { if (v !== value) onCommit(v); };
   return (
     <input aria-label={label} value={v} disabled={disabled} className={mono ? 'mono' : undefined} placeholder={placeholder}
@@ -49,7 +49,7 @@ export function SettingsPanel({ project, onSaved, getText, rev, onOp, onPreview,
   const [projName, setProjName] = useState(project.name);
   const [tabs, setTabs] = useState<{ label: string; icon: string; go: string }[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
-  useEffect(() => setProjName(project.name), [project.name]);
+  useEffect(() => { setProjName(project.name); }, [project.name]);
 
   useEffect(() => {
     let live = true;
