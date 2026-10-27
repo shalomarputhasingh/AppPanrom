@@ -15,7 +15,7 @@ def codes(src: str, **kw):
 
 
 def test_sample_compiles_to_ir():
-    r = compile_source(SAMPLE.read_text())
+    r = compile_source(SAMPLE.read_text(encoding="utf-8"))
     assert r.ok, r.diagnostics
     ir = r.ir
     assert ir["app"]["id"] == "com.apppanrom.vanakkam"
@@ -260,15 +260,15 @@ def test_trailing_newline_cannot_sneak_past_identifier_checks():
 
 @pytest.mark.parametrize("path", sorted((SAMPLE.parent).glob("*.apn")), ids=lambda p: p.name)
 def test_all_shipped_examples_compile_cleanly(path):
-    r = compile_source(path.read_text())
+    r = compile_source(path.read_text(encoding="utf-8"))
     assert r.ok and not r.diagnostics, [d.to_dict() for d in r.diagnostics]
 
 
 def test_language_doc_mentions_every_spec_item():
     """Drift guard: docs/language.md must document every function, component and style in spec/schema.json."""
     import json
-    spec = json.loads((SAMPLE.parents[1] / "spec" / "schema.json").read_text())
-    doc = (SAMPLE.parents[1] / "docs" / "language.md").read_text()
+    spec = json.loads((SAMPLE.parents[1] / "spec" / "schema.json").read_text(encoding="utf-8"))
+    doc = (SAMPLE.parents[1] / "docs" / "language.md").read_text(encoding="utf-8")
     missing = [n for group in ("functions", "components", "styles", "config_functions") for n in spec[group] if f"`{n}" not in doc]
     assert not missing, missing
 
@@ -284,7 +284,7 @@ def test_tanglish_vocabulary_compiles_to_the_same_program():
         return [strip(x) for x in o] if isinstance(o, list) else o
 
     for name in ("vanakkam", "counter", "notes", "calculator", "showcase"):
-        en = (SAMPLE.parents[1] / "examples" / f"{name}.apn").read_text()
+        en = (SAMPLE.parents[1] / "examples" / f"{name}.apn").read_text(encoding="utf-8")
         ta = to_tanglish(en)
         assert detect_style(en) == "english" and detect_style(ta) == "tanglish" and ta != en
         assert to_english(ta) == en  # lossless round trip, comments and strings untouched
@@ -339,7 +339,7 @@ def test_flagship_machan_app_is_tanglish_and_equivalent_in_english():
             return {k: strip(v) for k, v in o.items() if k not in ("pos", "kw_pos")}
         return [strip(x) for x in o] if isinstance(o, list) else o
 
-    ta = (SAMPLE.parents[1] / "examples" / "machan.apn").read_text()
+    ta = (SAMPLE.parents[1] / "examples" / "machan.apn").read_text(encoding="utf-8")
     assert detect_style(ta) == "tanglish" and "seyal " in ta and "thirumbi_kudu" in ta and "batan(" in ta
     en = to_english(ta)
     a, b = compile_source(ta), compile_source(en)

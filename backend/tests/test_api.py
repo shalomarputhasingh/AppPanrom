@@ -67,7 +67,7 @@ def test_paths_cannot_escape_the_project(client, settings):
         assert "TOP SECRET" not in r.text
         r = client.put(f"{base}/{bad}", json={"content": "x"})
         assert r.status_code in (404, 405, 422), (bad, r.status_code)
-    assert (settings.data_dir / "secret.txt").read_text() == "TOP SECRET"
+    assert (settings.data_dir / "secret.txt").read_text(encoding="utf-8") == "TOP SECRET"
     for bad_id in ["../x", "p_zzzzzzzzzzzz", "p_1", "..%2F"]:
         assert client.get(f"/api/projects/{bad_id}").status_code == 404
 

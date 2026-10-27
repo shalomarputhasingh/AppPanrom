@@ -8,10 +8,11 @@ const require = createRequire(import.meta.url);
 export const AP = require('../apppanrom-runtime.js');
 export const SPEC = require('../../spec/schema.json');
 const backend = path.resolve(here, '../../backend');
+const PYTHON = process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
 
 /** Compile AppPanrom source with the real Python compiler. */
 export function compile(src) {
-  const r = spawnSync('python3', ['-m', 'apppanrom.cli', 'compile', '-'], { cwd: backend, input: src, encoding: 'utf8' });
+  const r = spawnSync(PYTHON, ['-m', 'apppanrom.cli', 'compile', '-'], { cwd: backend, input: src, encoding: 'utf8' });
   const out = JSON.parse(r.stdout);
   if (!out.ok) throw new Error('compile failed: ' + JSON.stringify(out.diagnostics));
   return out.ir;

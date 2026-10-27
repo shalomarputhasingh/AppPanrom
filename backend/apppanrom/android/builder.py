@@ -18,7 +18,7 @@ from pathlib import Path
 from ..config import Settings
 from ..db import Database
 from .generate import GenerateError, generate_project
-from .prereqs import check_prerequisites, check_signing, find_apksigner, find_jarsigner, format_problems, gradle_bin
+from .prereqs import check_prerequisites, check_signing, find_apksigner, find_jarsigner, format_problems, gradle_bin, tool_env_names
 
 BUILD_ID_RE = re.compile(r"^b_[0-9a-f]{12}$")
 MIN_APK_BYTES = 50_000
@@ -290,7 +290,7 @@ class BuildManager:
     def _gradle(self, build_id: str, work: Path, task: str, release: bool) -> tuple[int, bool]:
         exe = gradle_bin(self.s)
         cmd = [exe, "--no-daemon", "--console=plain", "-p", str(work), task]
-        env = {k: os.environ[k] for k in PASSTHROUGH_ENV if k in os.environ}
+        env = {k: os.environ[k] for k in PASSTHROUGH_ENV + tool_env_names() if k in os.environ}
         env["GRADLE_USER_HOME"] = str(self.s.gradle_home)
         env["ANDROID_HOME"] = str(self.s.android_home)
         env["ANDROID_SDK_ROOT"] = str(self.s.android_home)
@@ -303,8 +303,10 @@ class BuildManager:
             env["APPANROM_SIGN_KEY_PASSWORD"] = self.s.effective_key_password
         self._log(build_id, f"[apppanrom] running: gradle --no-daemon --console=plain {task}")
         log_path = self.log_path(build_id)
+        # Own process group, so a timeout can stop Gradle and everything it started.
+        group = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
         proc = subprocess.Popen(cmd, cwd=work, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, start_new_session=True)
+                                stderr=subprocess.STDOUT, **group)
         with self._lock:
             self._procs[build_id] = proc
         timed_out = threading.Event()
@@ -337,6 +339,9 @@ class BuildManager:
 
     @staticmethod
     def _kill(proc: subprocess.Popen) -> None:
+        if os.name == "nt":  # taskkill /T also ends the child processes (the Gradle JVM) that proc.kill() would leave behind
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, stdin=subprocess.DEVNULL)
+            return
         try:
             os.killpg(proc.pid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError):

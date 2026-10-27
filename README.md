@@ -145,6 +145,10 @@ cd backend
 python -m uvicorn apppanrom.main:create_app --factory --port 8000
 ```
 
+Windows shortcut: `.\scripts\serve.ps1` does the build + serve in one go and also finds your Android SDK, a JDK 17-23 and a local
+Gradle 8.x for APK export (it prints what it found; `-NoBuild` skips the Studio build). If PowerShell blocks the script, run it with
+`powershell -ExecutionPolicy Bypass -File .\scripts\serve.ps1`.
+
 Open <http://127.0.0.1:8000>, create a project, press **Run** (Ctrl+Enter) to preview. Projects, builds and APKs are stored in `./data`
 (or `APPANROM_DATA_DIR`), which is not committed. Run the server from the `backend` folder; if you change the frontend, rebuild it
 (`npm run build`) and restart the server.
@@ -207,7 +211,8 @@ published app) and never commit them.
 | Build tab says Java / Gradle / Android SDK not ready | Follow the "fix" text shown; check `java -version`, `gradle -v`, and that `ANDROID_HOME` was exported in the terminal that started the server |
 | `sdkmanager` says it cannot find the SDK root | The unzipped folder must be `cmdline-tools/latest/...`, not `cmdline-tools/cmdline-tools/...` |
 | Gradle: "Could not GET ... 429" or timeouts | Network / Maven rate limit; just press Build again, it resumes from what was downloaded. Behind a proxy set `HTTPS_PROXY` |
-| Build fails with "Unsupported class file major version" | JDK too new/old for Gradle; use JDK 17 or 21 |
+| Build fails with "Unsupported class file major version" | JDK too new/old for Gradle; use JDK 17 or 21 (set `JAVA_HOME` to it; the Build tab warns about JDKs newer than 23) |
+| Windows: Gradle 9 is the only Gradle installed | The Android Gradle Plugin used here (8.5.2) needs Gradle 8.7-8.x; install Gradle 8.14.3 and set `GRADLE_BIN` to its `bin\gradle.bat` |
 | Studio page is blank / 404 at `/` | Frontend not built: `cd frontend && npm run build`, then restart the server |
 | `pip` / `python` not found on Windows | Use `py -m pip` / `py -m uvicorn`, or reinstall Python with "Add to PATH" |
 | Release buttons are disabled | The three `APPANROM_KEYSTORE*` variables were not set when the server started |

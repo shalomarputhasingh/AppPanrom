@@ -1,7 +1,7 @@
 """Real Android builds (real Gradle, real SDK). Skipped unless ANDROID_HOME / ANDROID_SDK_ROOT points at an SDK.
 
 Needs JDK 17+, Gradle 8.7+, platforms;android-34, build-tools;34.0.0 and network access to Google Maven / Maven Central.
-Run with:  ANDROID_HOME=~/android-sdk python3 -m pytest tests/test_real_build.py -v
+Run with:  ANDROID_HOME=~/android-sdk python -m pytest tests/test_real_build.py -v
 """
 import os
 import shutil
@@ -21,6 +21,8 @@ from test_signing_icon import png
 SDK = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
 pytestmark = pytest.mark.skipif(not SDK, reason="ANDROID_HOME not set: real Android builds are skipped")
 
+# Same variables the server reads (JAVA_HOME, GRADLE_BIN), so the test uses the JDK/Gradle the user configured, not whatever is first on PATH.
+TOOLS = dict(gradle_bin=os.environ.get("GRADLE_BIN"), java_home=Path(os.environ["JAVA_HOME"]) if os.environ.get("JAVA_HOME") else None)
 PASSWORD = "real-build-test-pw"
 SOURCE = '''app_uruvakku("Real Build")
 app_id_set("com.apppanrom.realbuild")
@@ -36,7 +38,7 @@ BUILD_TIMEOUT = 1200
 
 
 def build_tool(name: str) -> str | None:
-    found = sorted(Path(SDK, "build-tools").glob(f"*/{name}"))
+    found = sorted(p for ext in ("", ".exe", ".bat") for p in Path(SDK, "build-tools").glob(f"*/{name}{ext}"))
     return str(found[-1]) if found else shutil.which(name)
 
 
@@ -56,7 +58,7 @@ def env(tmp_path_factory):
     if shutil.which("keytool"):
         assert make_keystore(str(ks), "release", password=PASSWORD) == 0
         signing = dict(keystore_path=ks, keystore_password=PASSWORD, key_alias="release")
-    settings = make_settings(root, android_home=Path(SDK), **signing)
+    settings = make_settings(root, android_home=Path(SDK), **TOOLS, **signing)
     with TestClient(create_app(settings)) as client:
         yield client, root, bool(signing)
 
@@ -114,7 +116,7 @@ def test_debug_apk_builds_and_contains_what_it_should(env, project):
 
 def test_release_without_signing_is_refused(tmp_path, project):
     # A separate server without signing configured; the project is recreated there.
-    settings = make_settings(tmp_path, android_home=Path(SDK))
+    settings = make_settings(tmp_path, android_home=Path(SDK), **TOOLS)
     with TestClient(create_app(settings)) as client:
         pid = client.post("/api/projects", json={"name": "Unsigned"}).json()["id"]
         r = client.post(f"/api/projects/{pid}/builds", json={"kind": "release_apk"})

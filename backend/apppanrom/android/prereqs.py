@@ -11,19 +11,42 @@ from pathlib import Path
 from ..config import Settings
 
 MIN_JAVA = 17
+MAX_TESTED_JAVA = 23  # Gradle 8.11 runs on Java 17-23; newer JDKs make older Gradle versions fail with obscure errors
 COMPILE_SDK = 34
 _cache: dict[str, tuple[float, dict]] = {}
+_WINDOWS = os.name == "nt"
+# Windows programs (Java, Gradle, the Winsock layer) fail without these, so tools started here keep them.
+_WINDOWS_ENV = ("SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "PATHEXT", "USERPROFILE", "USERNAME", "HOMEDRIVE", "HOMEPATH",
+                "TEMP", "TMP", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)",
+                "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE")
+
+
+def tool_env_names() -> tuple[str, ...]:
+    """Environment variables passed through to child tools besides the ones set explicitly."""
+    return _WINDOWS_ENV if _WINDOWS else ()
+
+
+def find_exe(directory: Path, name: str) -> Path | None:
+    """`directory/name`, or on Windows `name.exe` / `.bat` / `.cmd`; None if no such file."""
+    for suffix in ("", ".exe", ".bat", ".cmd") if _WINDOWS else ("",):
+        p = directory / (name + suffix)
+        if p.is_file():
+            return p
+    return None
 
 
 def _run(cmd: list[str], timeout: int = 60) -> str:
-    env = {k: v for k, v in os.environ.items() if k in ("PATH", "HOME", "JAVA_HOME", "JAVA_TOOL_OPTIONS")}
+    keep = ("PATH", "HOME", "JAVA_HOME", "JAVA_TOOL_OPTIONS") + tool_env_names()
+    env = {k: v for k, v in os.environ.items() if k.upper() in keep}
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env, stdin=subprocess.DEVNULL)
     return (p.stdout or "") + (p.stderr or "")
 
 
 def java_bin(s: Settings) -> str | None:
-    if s.java_home and (s.java_home / "bin" / "java").is_file():
-        return str(s.java_home / "bin" / "java")
+    if s.java_home:
+        exe = find_exe(s.java_home / "bin", "java")
+        if exe:
+            return str(exe)
     return shutil.which("java")
 
 
@@ -64,6 +87,8 @@ def _check_java(s: Settings) -> dict:
     c["ok"] = major >= MIN_JAVA
     if not c["ok"]:
         c["detail"] += f" - Java {MIN_JAVA}+ is required"
+    elif major > MAX_TESTED_JAVA:
+        c["detail"] += f" - warning: Gradle 8 may not run on Java {major}; point JAVA_HOME at a JDK {MIN_JAVA}-{MAX_TESTED_JAVA} (21 is a good choice)"
     return c
 
 
@@ -148,12 +173,15 @@ def find_apksigner(s: Settings) -> str | None:
     def key(p: Path):
         return tuple(int(x) if x.isdigit() else 0 for x in p.name.split("."))
     for d in sorted((s.android_home / "build-tools").iterdir(), key=key, reverse=True):
-        if (d / "apksigner").is_file():
-            return str(d / "apksigner")
+        exe = find_exe(d, "apksigner")
+        if exe:
+            return str(exe)
     return None
 
 
 def find_jarsigner(s: Settings) -> str | None:
-    if s.java_home and (s.java_home / "bin" / "jarsigner").is_file():
-        return str(s.java_home / "bin" / "jarsigner")
+    if s.java_home:
+        exe = find_exe(s.java_home / "bin", "jarsigner")
+        if exe:
+            return str(exe)
     return shutil.which("jarsigner")

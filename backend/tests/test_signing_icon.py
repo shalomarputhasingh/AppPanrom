@@ -1,3 +1,4 @@
+import os
 import shutil
 import struct
 import zlib
@@ -65,11 +66,11 @@ def test_generator_adds_icon_only_when_given(tmp_path):
     from apppanrom.lang import compile_source
     ir = compile_source('screen_uruvakku("h"):\n    title("x")\n').ir
     generate_project(ir, tmp_path / "a")
-    assert "android:icon" not in (tmp_path / "a/app/src/main/AndroidManifest.xml").read_text()
+    assert "android:icon" not in (tmp_path / "a/app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
     icon = tmp_path / "i.png"
     icon.write_bytes(png(192))
     generate_project(ir, tmp_path / "b", icon)
-    assert 'android:icon="@mipmap/ic_launcher"' in (tmp_path / "b/app/src/main/AndroidManifest.xml").read_text()
+    assert 'android:icon="@mipmap/ic_launcher"' in (tmp_path / "b/app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
     assert (tmp_path / "b/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png").read_bytes() == png(192)
     icon.write_bytes(b"not a png")
     with pytest.raises(GenerateError):
@@ -118,7 +119,9 @@ def test_release_without_signing_fails_and_produces_nothing(tmp_path):
 def test_make_keystore_cli(tmp_path, capsys):
     ks = tmp_path / "release.jks"
     assert make_keystore(str(ks), "rel", password=PASSWORD) == 0
-    assert ks.is_file() and oct(ks.stat().st_mode)[-3:] == "600"
+    assert ks.is_file()
+    if os.name != "nt":  # Windows has no POSIX permission bits
+        assert oct(ks.stat().st_mode)[-3:] == "600"
     out = capsys.readouterr().out
     assert PASSWORD not in out and "APPANROM_KEYSTORE" in out
     assert make_keystore(str(ks), "rel", password=PASSWORD) == 1  # never overwrites
@@ -133,7 +136,7 @@ out = os.path.join(work, "app/build/outputs/bundle/release"); os.makedirs(out)
 aab = os.path.join(out, "app-release.aab")
 with zipfile.ZipFile(aab, "w", zipfile.ZIP_STORED) as z:
     z.writestr("BundleConfig.pb", b"x"); z.writestr("base/manifest/AndroidManifest.xml", b"x" * 100)
-    z.writestr("base/assets/www/apppanrom-runtime.js", open(os.path.join(work, "app/src/main/assets/www/apppanrom-runtime.js")).read())
+    z.writestr("base/assets/www/apppanrom-runtime.js", open(os.path.join(work, "app/src/main/assets/www/apppanrom-runtime.js"), "rb").read())
     z.writestr("base/dex/classes.dex", os.urandom(60000))
 @@SIGN@@
 print("BUNDLE SUCCESSFUL")
@@ -194,14 +197,19 @@ APK_BODY = '''
 out = os.path.join(work, "app/build/outputs/apk/release"); os.makedirs(out)
 with zipfile.ZipFile(os.path.join(out, "app-release.apk"), "w", zipfile.ZIP_STORED) as z:
     z.writestr("AndroidManifest.xml", "x" * 100)
-    z.writestr("assets/www/apppanrom-runtime.js", open(os.path.join(work, "app/src/main/assets/www/apppanrom-runtime.js")).read())
+    z.writestr("assets/www/apppanrom-runtime.js", open(os.path.join(work, "app/src/main/assets/www/apppanrom-runtime.js"), "rb").read())
     z.writestr("classes.dex", os.urandom(60000))
 print("BUILD SUCCESSFUL")
 '''
 
 
 def fake_apksigner(sdk, output: str, code: int = 0):
-    p = sdk / "build-tools" / "34.0.0" / "apksigner"
+    tools = sdk / "build-tools" / "34.0.0"
+    if os.name == "nt":  # find_apksigner looks for apksigner.bat on Windows
+        (tools / "apksigner.out").write_text(output + "\n", encoding="utf-8")
+        (tools / "apksigner.bat").write_text(f'@type "%~dp0apksigner.out"\r\n@exit /b {code}\r\n', encoding="utf-8")
+        return
+    p = tools / "apksigner"
     p.write_text(f"#!/bin/sh\ncat <<'EOF'\n{output}\nEOF\nexit {code}\n")
     p.chmod(0o755)
 
@@ -251,5 +259,5 @@ if leaked:
 
 def test_template_reads_signing_from_environment_only():
     from pathlib import Path
-    g = (Path(__file__).resolve().parents[2] / "android-template/app/build.gradle").read_text()
+    g = (Path(__file__).resolve().parents[2] / "android-template/app/build.gradle").read_text(encoding="utf-8")
     assert 'System.getenv("APPANROM_SIGN_STORE_PASSWORD")' in g and "storePassword \"" not in g

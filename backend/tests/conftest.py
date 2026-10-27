@@ -53,15 +53,22 @@ print("> Task :app:assembleDebug (fake)")
 out = os.path.join(work, "app/build/outputs/apk/debug"); os.makedirs(out)
 with zipfile.ZipFile(os.path.join(out, "app-debug.apk"), "w", zipfile.ZIP_STORED) as z:
     z.writestr("AndroidManifest.xml", "x" * 100)
-    z.writestr("assets/www/apppanrom-runtime.js", open(os.path.join(work, "app/src/main/assets/www/apppanrom-runtime.js")).read())
+    z.writestr("assets/www/apppanrom-runtime.js", open(os.path.join(work, "app/src/main/assets/www/apppanrom-runtime.js"), "rb").read())
     z.writestr("classes.dex", os.urandom(60000))
 print("BUILD SUCCESSFUL")
 '''
 
 
 def fake_gradle(tmp_path: Path, body: str = OK_BODY, name: str = "gradle") -> str:
+    script = FAKE_GRADLE.format(python=sys.executable, body=textwrap.dedent(body))
+    if os.name == "nt":  # no shebangs on Windows: a .cmd launcher runs the Python script
+        impl = tmp_path / f"{name}_impl.py"
+        impl.write_text(script, encoding="utf-8")
+        p = tmp_path / f"{name}.cmd"
+        p.write_text(f'@"{sys.executable}" "{impl}" %*\r\n', encoding="utf-8")
+        return str(p)
     p = tmp_path / name
-    p.write_text(FAKE_GRADLE.format(python=sys.executable, body=textwrap.dedent(body)))
+    p.write_text(script, encoding="utf-8")
     p.chmod(p.stat().st_mode | stat.S_IEXEC)
     return str(p)
 

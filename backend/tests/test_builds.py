@@ -109,7 +109,7 @@ def test_log_output_is_capped(tmp_path):
     with TestClient(create_app(s)) as c:
         b = wait_build(c, c.post(f"/api/projects/{mk(c)['id']}/builds").json()["id"])
         assert (s.builds_dir / b["id"] / "build.log").stat().st_size < 70_000
-        assert "output limit reached" in (s.builds_dir / b["id"] / "build.log").read_text()
+        assert "output limit reached" in (s.builds_dir / b["id"] / "build.log").read_text(encoding="utf-8")
 
 
 @needs_java
@@ -164,15 +164,15 @@ IR = {"app": {"name": "My <App> & 'Co'", "id": "com.x.app", "version": "1.2.3", 
 def test_generated_project_contents(tmp_path):
     dest = tmp_path / "proj"
     generate_project(IR, dest)
-    g = (dest / "app/build.gradle").read_text()
+    g = (dest / "app/build.gradle").read_text(encoding="utf-8")
     assert 'applicationId "com.x.app"' in g and "versionCode 1002003" in g and 'versionName "1.2.3"' in g
     assert "__" not in g
-    s = (dest / "app/src/main/res/values/strings.xml").read_text()
+    s = (dest / "app/src/main/res/values/strings.xml").read_text(encoding="utf-8")
     assert "My &lt;App&gt; &amp; \\'Co\\'" in s
-    assert "INTERNET" not in (dest / "app/src/main/AndroidManifest.xml").read_text()
-    assert "__PERMISSIONS__" not in (dest / "app/src/main/AndroidManifest.xml").read_text()
+    assert "INTERNET" not in (dest / "app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
+    assert "__PERMISSIONS__" not in (dest / "app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
     www = dest / "app/src/main/assets/www"
-    assert (www / "apppanrom-runtime.js").is_file() and "__APPANROM_IR__" in (www / "app.js").read_text()
+    assert (www / "apppanrom-runtime.js").is_file() and "__APPANROM_IR__" in (www / "app.js").read_text(encoding="utf-8")
 
 
 def test_permissions_are_declared_only_for_features_used(tmp_path):
@@ -181,13 +181,13 @@ def test_permissions_are_declared_only_for_features_used(tmp_path):
     plain = compile_source('screen_uruvakku("h"):\n    title("x")\n')
     assert plain.ir["permissions"] == []
     generate_project(plain.ir, tmp_path / "a")
-    assert "uses-permission" not in (tmp_path / "a/app/src/main/AndroidManifest.xml").read_text()
+    assert "uses-permission" not in (tmp_path / "a/app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
     src = 'function f():\n    vibrate_pannu(50)\nscreen_uruvakku("h"):\n    image_kaattu("https://x.com/a.png")\n    button("b", click_pannumbodhu=f)\n'
     r = compile_source(src)
     assert [p["permission"] for p in r.ir["permissions"]] == ["android.permission.INTERNET", "android.permission.VIBRATE"]
     assert r.ir["permissions"][1]["used_by"] == ["vibrate_pannu"]
     generate_project(r.ir, tmp_path / "b")
-    manifest = (tmp_path / "b/app/src/main/AndroidManifest.xml").read_text()
+    manifest = (tmp_path / "b/app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
     assert "android.permission.INTERNET" in manifest and "android.permission.VIBRATE" in manifest
 
 
@@ -230,7 +230,7 @@ def test_native_web_bridge_is_enabled_only_for_programs_that_make_web_requests(t
 
     def features(ir, name):
         generate_project(ir, tmp_path / name)
-        return (tmp_path / name / "app/src/main/res/values/features.xml").read_text()
+        return (tmp_path / name / "app/src/main/res/values/features.xml").read_text(encoding="utf-8")
 
     # an image alone needs INTERNET but not the native bridge
     img = compile_source('screen_uruvakku("h"):\n    image_kaattu("https://x.com/a.png")\n')
@@ -240,7 +240,7 @@ def test_native_web_bridge_is_enabled_only_for_programs_that_make_web_requests(t
     assert api.ok, api.diagnostics
     assert [p["permission"] for p in api.ir["permissions"]] == ["android.permission.INTERNET"]
     assert '"ap_net">true<' in features(api.ir, "api")
-    js = (tmp_path / "api/app/src/main/assets/www/app.js").read_text()
+    js = (tmp_path / "api/app/src/main/assets/www/app.js").read_text(encoding="utf-8")
     assert "window.ApNative" in js and "__apNativeDone" in js
     assert (tmp_path / "api/app/src/main/java/com/apppanrom/shell/NativeBridge.java").is_file()
 
@@ -256,15 +256,15 @@ def test_runtime_permission_features_declare_permissions_flags_and_gps_not_requi
     assert all(p["runtime"] for p in perms.values())                       # all three are asked for while the app runs
     assert perms["android.permission.POST_NOTIFICATIONS"]["used_by"] == ["notification_kaattu"]
     generate_project(r.ir, tmp_path / "idam")
-    manifest = (tmp_path / "idam/app/src/main/AndroidManifest.xml").read_text()
+    manifest = (tmp_path / "idam/app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
     assert 'android.hardware.location.gps" android:required="false"' in manifest
-    feats = (tmp_path / "idam/app/src/main/res/values/features.xml").read_text()
+    feats = (tmp_path / "idam/app/src/main/res/values/features.xml").read_text(encoding="utf-8")
     assert '"ap_location">true<' in feats and '"ap_notify">true<' in feats and '"ap_net">false<' in feats
-    js = (tmp_path / "idam/app/src/main/assets/www/app.js").read_text()
+    js = (tmp_path / "idam/app/src/main/assets/www/app.js").read_text(encoding="utf-8")
     assert "N.location" in js and "N.notification" in js
     # a program with only web requests gets neither location nor notification flags and no GPS feature lines
     api = compile_source('function got(r):\n    debug_log(r["status"])\nfunction go():\n    api_get("https://x.com/a", "got")\nscreen_uruvakku("h"):\n    button("b", click_pannumbodhu=go)\n')
     generate_project(api.ir, tmp_path / "api2")
-    f2 = (tmp_path / "api2/app/src/main/res/values/features.xml").read_text()
+    f2 = (tmp_path / "api2/app/src/main/res/values/features.xml").read_text(encoding="utf-8")
     assert '"ap_net">true<' in f2 and '"ap_location">false<' in f2 and '"ap_notify">false<' in f2
-    assert "uses-feature" not in (tmp_path / "api2/app/src/main/AndroidManifest.xml").read_text()
+    assert "uses-feature" not in (tmp_path / "api2/app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")

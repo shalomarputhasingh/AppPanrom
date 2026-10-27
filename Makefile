@@ -1,3 +1,5 @@
+PYTHON ?= python3
+
 .PHONY: setup test test-backend test-runtime test-frontend e2e dev-backend dev-frontend build serve
 
 setup:
@@ -7,7 +9,7 @@ setup:
 test: test-backend test-runtime test-frontend
 
 test-backend:
-	cd backend && python3 -m pytest -q
+	cd backend && $(PYTHON) -m pytest -q
 
 test-runtime:
 	cd runtime && node --test test/*.test.mjs

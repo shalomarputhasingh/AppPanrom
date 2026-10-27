@@ -13,12 +13,19 @@ import { chromium } from 'playwright-core';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../..');
 const port = 8765;
+const PYTHON = process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
 const base = `http://127.0.0.1:${port}`;
 const shots = process.env.E2E_SHOTS || '';
 if (shots) mkdirSync(shots, { recursive: true });
 
 function findChromium() {
   if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
+  if (process.platform === 'win32') {
+    const found = ['C:\Program Files\Google\Chrome\Application\chrome.exe', 'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
+      'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'].find(existsSync);
+    if (found) return found;
+    throw new Error('No Chrome/Edge found; set CHROMIUM_PATH');
+  }
   const dir = process.env.PLAYWRIGHT_BROWSERS_PATH || '/opt/pw-browsers';
   for (const d of readdirSync(dir).filter((n) => n.startsWith('chromium-'))) {
     const p = path.join(dir, d, 'chrome-linux', 'chrome');
@@ -69,7 +76,7 @@ createTlsServer({ key: readFileSync(certKey), cert: readFileSync(certFile) }, (r
     send(404, { error: 'nope' });
   });
 }).listen(8790, '127.0.0.1');
-const server = spawn('python3', ['-m', 'uvicorn', 'apppanrom.main:create_app', '--factory', '--port', String(port), '--log-level', 'warning'], {
+const server = spawn(PYTHON, ['-m', 'uvicorn', 'apppanrom.main:create_app', '--factory', '--port', String(port), '--log-level', 'warning'], {
   cwd: path.join(root, 'backend'),
   env: { ...process.env, APPANROM_DATA_DIR: data, APPANROM_PROXY_ALLOW_PRIVATE: '1', APPANROM_PROXY_CA_FILE: certFile, GROQ_API_KEY: 'gsk_e2e_fake_key_0123456789', APPANROM_AI_MAX_WAIT: '1', APPANROM_AI_BASE_URL: 'http://127.0.0.1:8789/openai/v1' },
   stdio: 'inherit',
@@ -448,7 +455,7 @@ screen_uruvakku("home"):
   });
   await step('navbar, tabs, hidden bar and no blue tap box in a real app bundle (Chromium)', async () => {
     const out = path.join(data, 'proj-bars');
-    const r = spawnSync('python3', ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', 'showcase.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
+    const r = spawnSync(PYTHON, ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', 'showcase.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
     if (r.status !== 0) throw new Error('generate failed: ' + r.stderr);
     const www = path.join(out, 'app/src/main/assets/www');
     const srv = createServer((req, res) => {
@@ -829,7 +836,7 @@ screen_uruvakku("home"):
     button("Buzz", click_pannumbodhu=buzz)
 `);
     const out = path.join(data, 'android-device');
-    const r = spawnSync('python3', ['-m', 'apppanrom.cli', 'android-project', src, out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
+    const r = spawnSync(PYTHON, ['-m', 'apppanrom.cli', 'android-project', src, out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
     if (r.status !== 0) throw new Error('generate failed: ' + r.stderr);
     const manifest = readFileSync(path.join(out, 'app/src/main/AndroidManifest.xml'), 'utf8');
     if (!manifest.includes('android.permission.VIBRATE') || manifest.includes('INTERNET')) throw new Error('wrong permissions in manifest:\n' + manifest);
@@ -854,7 +861,7 @@ screen_uruvakku("home"):
   });
   await step('generated Android web bundle runs in Chromium (same CSP as the APK) incl. back handling', async () => {
     const out = path.join(data, 'android-project');
-    const r = spawnSync('python3', ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', 'vanakkam.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
+    const r = spawnSync(PYTHON, ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', 'vanakkam.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
     if (r.status !== 0) throw new Error('generate failed: ' + r.stderr);
     const www = path.join(out, 'app/src/main/assets/www');
     const srv = createServer((req, res) => {
@@ -884,7 +891,7 @@ screen_uruvakku("home"):
   });
   await step('Vaanilai (web API example) in the generated Android bundle: native bridge glue, loading state, result, error path', async () => {
     const out = path.join(data, 'vaanilai-project');
-    const r = spawnSync('python3', ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', 'vaanilai.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
+    const r = spawnSync(PYTHON, ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', 'vaanilai.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
     if (r.status !== 0) throw new Error('generate failed: ' + r.stderr);
     if (!/"ap_net">true</.test(readFileSync(path.join(out, 'app/src/main/res/values/features.xml'), 'utf8'))) throw new Error('bridge flag missing');
     const www = path.join(out, 'app/src/main/assets/www');
@@ -965,7 +972,7 @@ screen_uruvakku("home"):
     };
     for (const name of Object.keys(OFFLINE_APPS)) {
       const out = path.join(data, name + '-project');
-      const r = spawnSync('python3', ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', name + '.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
+      const r = spawnSync(PYTHON, ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', name + '.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
       if (r.status !== 0) throw new Error(name + ': generate failed: ' + r.stderr);
       const manifest = readFileSync(path.join(out, 'app/src/main/AndroidManifest.xml'), 'utf8');
       if (/INTERNET/.test(manifest) || /ap_net">true/.test(readFileSync(path.join(out, 'app/src/main/res/values/features.xml'), 'utf8'))) throw new Error(name + ' should not declare INTERNET');
@@ -993,7 +1000,7 @@ screen_uruvakku("home"):
   });
   await step('claymorphism calculator: clay shadows computed in Chromium, calculations work, pressed state', async () => {
     const out = path.join(data, 'calc-project');
-    const r = spawnSync('python3', ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', 'calculator.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
+    const r = spawnSync(PYTHON, ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', 'calculator.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
     if (r.status !== 0) throw new Error('generate failed: ' + r.stderr);
     const www = path.join(out, 'app/src/main/assets/www');
     const srv = createServer((req, res) => {
@@ -1026,7 +1033,7 @@ screen_uruvakku("home"):
   await step('looks (glass, brutal, soft UI, gradient), animation and DOM patching in Chromium', async () => {
     const serve = async (example, port) => {
       const out = path.join(data, 'proj-' + example);
-      const r = spawnSync('python3', ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', example + '.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
+      const r = spawnSync(PYTHON, ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', example + '.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
       if (r.status !== 0) throw new Error('generate failed: ' + r.stderr);
       const www = path.join(out, 'app/src/main/assets/www');
       return createServer((req, res) => {
@@ -1077,7 +1084,7 @@ screen_uruvakku("home"):
   });
   await step('Machan Planner (flagship Tanglish app): tasks, expenses, dropdown state, looks, persistence - in Chromium', async () => {
     const out = path.join(data, 'proj-machan');
-    const r = spawnSync('python3', ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', 'machan.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
+    const r = spawnSync(PYTHON, ['-m', 'apppanrom.cli', 'android-project', path.join(root, 'examples', 'machan.apn'), out], { cwd: path.join(root, 'backend'), encoding: 'utf8' });
     if (r.status !== 0) throw new Error('generate failed: ' + r.stderr);
     const www = path.join(out, 'app/src/main/assets/www');
     const srv = createServer((req, res) => {
