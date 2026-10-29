@@ -1,0 +1,8 @@
+Debug APKs built by GitHub Actions from commit 6ae3960fdc97388bc5fa36ac783aeecf72193bb4
+9892c98edc9d71d06c1aad7b817697e543163ee5c82d68a0d74778da1330095b  AppPanrom-brain-quiz-debug-apk.apk
+7864993e5a8798ea3d12e28a27f7fed1e8a2c1b2efcae9ac8d49c048d0683aca  AppPanrom-calculator-debug-apk.apk
+9da13c0dd68aad4bafdd31dc51ae24a2f9534fd370cc731e3d5c3818ddf27256  AppPanrom-daily-planner-debug-apk.apk
+5e4d7c18a4c2f0d0fecc7fa2b9a80c88d965f274000aad22fe368be68f4ae4c7  AppPanrom-hydrate-debug-apk.apk
+58f5769a940e5a06be8fadcd3d8577087d42c201632efbfa2c28f36dc68c1f06  AppPanrom-pocket-ledger-debug-apk.apk
+2d04c8772f87c2e6f7c8d8a178d6d6e513ef7836b167a2af5814c6ccbf02eb99  AppPanrom-split-and-tip-debug-apk.apk
+85f0a5a84551c88ebb76dd67f940ffcee0482949c5ed74b980fcdc7f955e16e4  AppPanrom-vanakkam-debug-apk.apk
