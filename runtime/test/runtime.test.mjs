@@ -373,30 +373,30 @@ test('calculator example does real arithmetic through its key handlers', () => {
   assert.equal(calc(['2', '+', '+', '5', '=']).main, '7', 'changing the operator keeps the number');
 });
 
-test('Naal Planner example: dashboard, search, filters, actions, add, stats and persistence', () => {
-  const src = readFileSync(new URL('../../examples/naal_planner.apn', import.meta.url), 'utf8');
+test('Daily Planner example: dashboard, search, filters, actions, add, stats and persistence', () => {
+  const src = readFileSync(new URL('../../examples/daily_planner.apn', import.meta.url), 'utf8');
   const storage = AP.memoryStorage();
   const texts = (rt) => flat(rt.render()).filter((n) => n.c === 'text_kaattu').map((n) => n.props.text);
   const titlesShown = (rt) => flat(rt.render()).filter((n) => n.c === 'text_kaattu' && n.style.font_size === 17).map((n) => n.props.text);
-  const mk = () => boot(src, { storage, namespace: 'naal' });
+  const mk = () => boot(src, { storage, namespace: 'daily' });
   let { rt, toasts } = mk();
 
   // seeded dashboard
   assert.ok(texts(rt).includes('2 of 6 tasks done'));
   assert.ok(texts(rt).some((t) => t.startsWith('Let\'s get moving')));
-  assert.equal(texts(rt).find((t) => t.startsWith('Next up')), 'Next up: Gym-la 30 min workout');
+  assert.equal(texts(rt).find((t) => t.startsWith('Next up')), 'Next up: 30 minute workout');
   // sorted: active by priority first, finished last
-  assert.deepEqual(titlesShown(rt), ['Gym-la 30 min workout', 'College project report', 'Weekly groceries vaanga', 'Read 20 pages', 'Amma-kku phone panna', 'Team standup notes']);
+  assert.deepEqual(titlesShown(rt), ['30 minute workout', 'College project report', 'Buy weekly groceries', 'Read 20 pages', 'Call Mom', 'Team standup notes']);
 
   // filters
   rt.fire('filter_active');
   assert.equal(titlesShown(rt).length, 4);
   rt.fire('filter_done');
-  assert.deepEqual(titlesShown(rt), ['Amma-kku phone panna', 'Team standup notes']);
+  assert.deepEqual(titlesShown(rt), ['Call Mom', 'Team standup notes']);
   rt.fire('filter_all');
   // search (case-insensitive, combines with the filter)
-  rt.setInputFromUI('search', 'GYM');
-  assert.deepEqual(titlesShown(rt), ['Gym-la 30 min workout']);
+  rt.setInputFromUI('search', 'WORKOUT');
+  assert.deepEqual(titlesShown(rt), ['30 minute workout']);
   rt.setInputFromUI('search', 'zzz');
   assert.ok(texts(rt).includes('🌱 Nothing here'));
   rt.setInputFromUI('search', '');
@@ -417,16 +417,16 @@ test('Naal Planner example: dashboard, search, filters, actions, add, stats and 
   rt.fire('go_add');
   assert.equal(rt.currentScreen(), 'add');
   rt.fire('add_task');
-  assert.equal(toasts.at(-1), 'Task name enter pannu da');
-  rt.setInputFromUI('new_title', '  gym-LA 30 min workout ');
+  assert.equal(toasts.at(-1), 'Please enter a task name');
+  rt.setInputFromUI('new_title', '  30 MINUTE workout ');
   rt.fire('add_task');
-  assert.match(toasts.at(-1), /Already irukku/);
+  assert.match(toasts.at(-1), /Already exists/);
   rt.setInputFromUI('new_title', 'Buy milk');
   rt.setInputFromUI('new_prio', 'High');
   rt.setInputFromUI('new_cat', 'Health');
   rt.fire('add_task');
   assert.equal(rt.currentScreen(), 'home');
-  assert.deepEqual(titlesShown(rt).slice(0, 3), ['Gym-la 30 min workout', 'College project report', 'Buy milk'], 'new High task joins the top priority tier');
+  assert.deepEqual(titlesShown(rt).slice(0, 3), ['30 minute workout', 'College project report', 'Buy milk'], 'new High task joins the top priority tier');
   assert.equal(rt.getInput('new_title'), '', 'form is cleared');
 
   // stats

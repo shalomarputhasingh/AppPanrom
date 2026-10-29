@@ -1,7 +1,7 @@
-# Naal Planner - a task planner with a dashboard, search, filters, statistics and accent colours.
-# Everything is saved on the phone (data_save_pannu). Written entirely in AppPanrom (Tanglish).
-app_uruvakku("Naal Planner")
-app_id_set("com.apppanrom.naalplanner")
+# Daily Planner - a task planner with a dashboard, search, filters, statistics and accent colours.
+# Everything is saved on the phone (data_save_pannu). Written entirely in AppPanrom.
+app_uruvakku("Daily Planner")
+app_id_set("com.apppanrom.dailyplanner")
 app_version_set("1.0.0")
 app_theme_set("dark")
 
@@ -12,10 +12,10 @@ mari current_filter = "All"
 # ------------------------------------------------------------------ data
 function seed_tasks():
     return [
-        {"title": "Gym-la 30 min workout", "prio": "High", "cat": "Health", "done": false},
+        {"title": "30 minute workout", "prio": "High", "cat": "Health", "done": false},
         {"title": "College project report", "prio": "High", "cat": "Study", "done": false},
-        {"title": "Amma-kku phone panna", "prio": "Medium", "cat": "Personal", "done": true},
-        {"title": "Weekly groceries vaanga", "prio": "Low", "cat": "Personal", "done": false},
+        {"title": "Call Mom", "prio": "Medium", "cat": "Personal", "done": true},
+        {"title": "Buy weekly groceries", "prio": "Low", "cat": "Personal", "done": false},
         {"title": "Team standup notes", "prio": "Medium", "cat": "Work", "done": true},
         {"title": "Read 20 pages", "prio": "Low", "cat": "Study", "done": false}
     ]
@@ -144,7 +144,7 @@ function focus_text():
                 return "Next up: " + t["title"]
     enna_na total_count() == 0:
         return "No tasks yet. Add your first one!"
-    return "All done. Semma mass!"
+    return "All done. Great job!"
 
 function hero_message():
     enna_na total_count() == 0:
@@ -210,11 +210,11 @@ function clear_done():
 function add_task():
     mari title = text_trim(input_value("new_title"))
     enna_na title == "":
-        toast_kaattu("Task name enter pannu da")
+        toast_kaattu("Please enter a task name")
         return
     ovvoru t in tasks:
         enna_na text_lower(t["title"]) == text_lower(title):
-            toast_kaattu("Already irukku: " + title)
+            toast_kaattu("Already exists: " + title)
             return
     append(tasks, {"title": title, "prio": input_value("new_prio"), "cat": input_value("new_cat"), "done": false})
     persist()
@@ -239,14 +239,14 @@ function wipe_all():
 
 # ------------------------------------------------------------------ screens
 screen_uruvakku("home", style={"background": bg()}):
-    screen_title("Naal Planner")
+    screen_title("Daily Planner")
     column_uruvakku(style={"padding": 16, "gap": 14}):
         row_uruvakku(style={"gap": 8}):
             button("Home", click_pannumbodhu=go_home, style={"background": tab_bg("home", "home"), "text_color": tab_ink("home", "home"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
             button("Add", click_pannumbodhu=go_add, style={"background": tab_bg("add", "home"), "text_color": tab_ink("add", "home"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
             button("Stats", click_pannumbodhu=go_stats, style={"background": tab_bg("stats", "home"), "text_color": tab_ink("stats", "home"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
             button("Settings", click_pannumbodhu=go_settings, style={"background": tab_bg("settings", "home"), "text_color": tab_ink("settings", "home"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
-        text_kaattu("Vanakkam, Machan 👋", style={"text_color": ink(), "font_size": 26, "font_weight": "bold"})
+        text_kaattu("Hello there 👋", style={"text_color": ink(), "font_size": 26, "font_weight": "bold"})
         card_uruvakku(style={"background": accent(), "padding": 18, "gap": 8, "corner_radius": 24, "border_width": 0}):
             text_kaattu("TODAY'S PROGRESS", style={"text_color": "#E0E7FF", "font_size": 12, "font_weight": "bold"})
             text_kaattu(str(done_count()) + " of " + str(total_count()) + " tasks done", style={"text_color": "#FFFFFF", "font_size": 24, "font_weight": "bold"})
@@ -349,5 +349,5 @@ screen_uruvakku("settings", style={"background": bg()}):
             button("Restore demo tasks", click_pannumbodhu=reset_demo, style={"background": edge(), "text_color": ink(), "corner_radius": 14, "height": 46})
             button("Delete all tasks", click_pannumbodhu=wipe_all, style={"background": "#F43F5E", "text_color": "#FFFFFF", "corner_radius": 14, "height": 46})
         card_uruvakku(style={"background": card_bg(), "padding": 16, "gap": 4, "corner_radius": 20, "border_color": edge()}):
-            text_kaattu("Naal Planner 1.0", style={"text_color": ink(), "font_weight": "bold"})
+            text_kaattu("Daily Planner 1.0", style={"text_color": ink(), "font_weight": "bold"})
             text_kaattu("Built with AppPanrom. Your tasks are stored only on this phone.", style={"text_color": muted(), "font_size": 13})
