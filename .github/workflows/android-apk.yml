@@ -1,0 +1,73 @@
+name: Build Android APK
+
+# Builds a REAL debug APK from an AppPanrom program on GitHub's runners (they have normal internet access
+# and can install the Android SDK). The APK is uploaded as a downloadable artifact of the run.
+on:
+  push:
+    branches: [claude/new-session-c11sr3]
+    paths:
+      - "android-template/**"
+      - "backend/apppanrom/android/**"
+      - "backend/apppanrom/lang/**"
+      - "runtime/**"
+      - "spec/**"
+      - "examples/**"
+      - ".github/workflows/android-apk.yml"
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "AppPanrom source file to build"
+        default: "examples/vanakkam.apn"
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      APP_FILE: ${{ github.event.inputs.app || 'examples/vanakkam.apn' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Compile the AppPanrom program and generate the Android project
+        working-directory: backend
+        run: python -m apppanrom.cli android-project "../$APP_FILE" "$RUNNER_TEMP/app"
+
+      - name: Build the debug APK with Gradle
+        working-directory: ${{ runner.temp }}/app
+        run: gradle --no-daemon --console=plain assembleDebug
+
+      - name: Verify the APK is real
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          import os, pathlib, sys
+          from apppanrom.android.builder import verify_apk
+          apk = pathlib.Path(os.environ["RUNNER_TEMP"]) / "app/app/build/outputs/apk/debug/app-debug.apk"
+          problem = verify_apk(apk)
+          print(apk, apk.stat().st_size if apk.exists() else "missing", "->", problem or "OK")
+          sys.exit(1 if problem else 0)
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AppPanrom-debug-apk
+          path: ${{ runner.temp }}/app/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
