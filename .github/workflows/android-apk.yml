@@ -75,3 +75,28 @@ jobs:
           name: AppPanrom-${{ matrix.name }}-debug-apk
           path: ${{ runner.temp }}/app-${{ matrix.name }}/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+  # Saves the built APKs on a dedicated branch so they can be fetched with plain git (no artifact login needed).
+  publish:
+    needs: build-apk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: AppPanrom-*-debug-apk
+          path: ${{ runner.temp }}/apks
+      - name: Commit the APKs to the apk-builds branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan apk-builds-tmp
+          git rm -rf --quiet .
+          for d in "$RUNNER_TEMP"/apks/*; do cp "$d/app-debug.apk" "./$(basename "$d").apk"; done
+          printf 'Debug APKs built by GitHub Actions from commit %s\n' "$GITHUB_SHA" > README.txt
+          sha256sum *.apk >> README.txt
+          git add .
+          git commit -q -m "APKs for $GITHUB_SHA"
+          git push --force origin HEAD:apk-builds
