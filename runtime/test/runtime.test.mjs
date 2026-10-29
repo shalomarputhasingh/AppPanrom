@@ -347,3 +347,28 @@ test('setScreen shows a specific screen for design tooling', () => {
   assert.equal(rt.render().children[0].props.text, 'B');
   assert.equal(rt.setScreen('zzz'), false);
 });
+
+test('calculator example does real arithmetic through its key handlers', () => {
+  const src = readFileSync(new URL('../../examples/calculator.apn', import.meta.url), 'utf8');
+  const press = (rt, keys) => keys.forEach((k) => rt.fire(({ '+': 'plus', '-': 'minus', '*': 'times', '/': 'divide', '=': 'equals', '.': 'press_dot', C: 'clear_all', neg: 'negate', bs: 'backspace' })[k] || 'd' + k));
+  const display = (rt) => { const t = flat(rt.render()).filter((n) => n.c === 'text_kaattu'); return { pending: t[0].props.text, main: t[1].props.text }; };
+  const calc = (keys) => { const { rt } = boot(src); press(rt, keys); return display(rt); };
+  assert.equal(calc(['7', '+', '8', '=']).main, '15');
+  assert.equal(calc(['0', '.', '1', '+', '0', '.', '2', '=']).main, '0.3');
+  assert.equal(calc(['1', '2', '*', '3', '-', '6', '=']).main, '30', 'chained operators evaluate left to right');
+  assert.equal(calc(['9', '/', '4', '=']).main, '2.25');
+  assert.equal(calc(['9', '/', '0', '=']).main, 'Error');
+  assert.equal(calc(['5', 'neg']).main, '-5');
+  assert.equal(calc(['5', 'neg', 'neg']).main, '5');
+  assert.equal(calc(['1', '2', '3', 'bs']).main, '12');
+  assert.equal(calc(['7', 'bs']).main, '0');
+  assert.equal(calc(['5', '+', '3', 'C']).main, '0');
+  assert.equal(calc(['1', '.', '5', '.', '5']).main, '1.55', 'only one decimal point');
+  assert.equal(calc(['0', '0', '7']).main, '7', 'no leading zeros');
+  assert.equal(calc(['5', '+']).pending, '5 +');
+  assert.equal(calc(['6', '*']).pending, '6 ×');
+  assert.equal(calc(['2', '+', '3', '=', '+', '4', '=']).main, '9', 'result can be used for the next calculation');
+  assert.equal(calc(['9', '/', '0', '=', '5']).main, '5', 'typing after an error starts fresh');
+  assert.equal(calc(['1', '-', '2', '=']).main, '-1');
+  assert.equal(calc(['2', '+', '+', '5', '=']).main, '7', 'changing the operator keeps the number');
+});

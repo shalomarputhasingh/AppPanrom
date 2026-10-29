@@ -14,17 +14,19 @@ on:
       - "examples/**"
       - ".github/workflows/android-apk.yml"
   workflow_dispatch:
-    inputs:
-      app:
-        description: "AppPanrom source file to build"
-        default: "examples/vanakkam.apn"
 
 jobs:
   build-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: calculator, file: examples/calculator.apn }
+          - { name: vanakkam, file: examples/vanakkam.apn }
     env:
-      APP_FILE: ${{ github.event.inputs.app || 'examples/vanakkam.apn' }}
+      APP_FILE: ${{ matrix.file }}
     steps:
       - uses: actions/checkout@v4
 
@@ -50,10 +52,10 @@ jobs:
 
       - name: Compile the AppPanrom program and generate the Android project
         working-directory: backend
-        run: python -m apppanrom.cli android-project "../$APP_FILE" "$RUNNER_TEMP/app"
+        run: python -m apppanrom.cli android-project "../$APP_FILE" "$RUNNER_TEMP/app-${{ matrix.name }}"
 
       - name: Build the debug APK with Gradle
-        working-directory: ${{ runner.temp }}/app
+        working-directory: ${{ runner.temp }}/app-${{ matrix.name }}
         run: gradle --no-daemon --console=plain assembleDebug
 
       - name: Verify the APK is real
@@ -62,7 +64,7 @@ jobs:
           python - <<'PY'
           import os, pathlib, sys
           from apppanrom.android.builder import verify_apk
-          apk = pathlib.Path(os.environ["RUNNER_TEMP"]) / "app/app/build/outputs/apk/debug/app-debug.apk"
+          apk = pathlib.Path(os.environ["RUNNER_TEMP"]) / "app-${{ matrix.name }}/app/build/outputs/apk/debug/app-debug.apk"
           problem = verify_apk(apk)
           print(apk, apk.stat().st_size if apk.exists() else "missing", "->", problem or "OK")
           sys.exit(1 if problem else 0)
@@ -70,6 +72,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: AppPanrom-debug-apk
-          path: ${{ runner.temp }}/app/app/build/outputs/apk/debug/app-debug.apk
+          name: AppPanrom-${{ matrix.name }}-debug-apk
+          path: ${{ runner.temp }}/app-${{ matrix.name }}/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

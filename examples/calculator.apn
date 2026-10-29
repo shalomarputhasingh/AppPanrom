@@ -1,0 +1,177 @@
+# Calculator - a four-function calculator written in AppPanrom (Tanglish).
+# State lives in global variables; every key is a button whose handler is a named function.
+app_uruvakku("Calculator")
+app_id_set("com.apppanrom.calculator")
+app_version_set("1.0.0")
+app_theme_set("dark")
+
+mari current = "0"      # the number being typed (text)
+mari previous = 0       # the number before the operator
+mari op = ""            # "+", "-", "*" or "/" (empty when none is pending)
+mari fresh = true       # true: the next digit starts a new number
+
+function show_number(n):
+    return str(round(n, 8))
+
+function add_digit(d):
+    enna_na fresh or current == "0":
+        current = d
+        fresh = false
+    illana:
+        current = current + d
+
+function d0():
+    add_digit("0")
+
+function d1():
+    add_digit("1")
+
+function d2():
+    add_digit("2")
+
+function d3():
+    add_digit("3")
+
+function d4():
+    add_digit("4")
+
+function d5():
+    add_digit("5")
+
+function d6():
+    add_digit("6")
+
+function d7():
+    add_digit("7")
+
+function d8():
+    add_digit("8")
+
+function d9():
+    add_digit("9")
+
+function press_dot():
+    enna_na fresh:
+        current = "0."
+        fresh = false
+    illana_enna not text_contains(current, "."):
+        current = current + "."
+
+function negate():
+    enna_na current != "0" and current != "Error":
+        enna_na text_contains(current, "-"):
+            current = text_replace(current, "-", "")
+        illana:
+            current = "-" + current
+
+function backspace():
+    enna_na fresh or current == "Error":
+        return
+    mari chars = []
+    ovvoru ch in current:
+        append(chars, ch)
+    enna_na length(chars) <= 1:
+        current = "0"
+        fresh = true
+    illana:
+        remove(chars, length(chars) - 1)
+        current = text_join(chars, "")
+
+function clear_all():
+    current = "0"
+    previous = 0
+    op = ""
+    fresh = true
+
+function fail():
+    current = "Error"
+    previous = 0
+    op = ""
+    fresh = true
+
+# Applies the pending operator to `previous` and the number on the display.
+function calculate():
+    enna_na op == "" or current == "Error":
+        return
+    mari b = float(current)
+    mari result = 0
+    enna_na op == "+":
+        result = previous + b
+    illana_enna op == "-":
+        result = previous - b
+    illana_enna op == "*":
+        result = previous * b
+    illana:
+        enna_na b == 0:
+            fail()
+            return
+        result = previous / b
+    current = show_number(result)
+    previous = result
+    op = ""
+    fresh = true
+
+function choose(o):
+    enna_na current == "Error":
+        return
+    enna_na op != "" and not fresh:
+        calculate()
+    previous = float(current)
+    op = o
+    fresh = true
+
+function plus():
+    choose("+")
+
+function minus():
+    choose("-")
+
+function times():
+    choose("*")
+
+function divide():
+    choose("/")
+
+function equals():
+    calculate()
+
+function pending_text():
+    enna_na op == "":
+        return " "
+    mari symbol = op
+    enna_na op == "*":
+        symbol = "×"
+    illana_enna op == "/":
+        symbol = "÷"
+    return show_number(previous) + " " + symbol
+
+screen_uruvakku("home", style={"background": "#111827"}):
+    screen_title("Calculator")
+    column_uruvakku(style={"padding": 16, "gap": 12}):
+        card_uruvakku(style={"background": "#1F2937", "padding": 16, "gap": 4, "corner_radius": 20}):
+            text_kaattu(pending_text(), style={"text_color": "#9CA3AF", "font_size": 18, "text_align": "right"})
+            text_kaattu(current, style={"text_color": "#FFFFFF", "font_size": 44, "font_weight": "bold", "text_align": "right"})
+        row_uruvakku(style={"gap": 10}):
+            button("C", click_pannumbodhu=clear_all, style={"background": "#6B7280", "text_color": "#FFFFFF", "font_size": 24, "corner_radius": 18, "height": 64, "width": "fill"})
+            button("±", click_pannumbodhu=negate, style={"background": "#6B7280", "text_color": "#FFFFFF", "font_size": 24, "corner_radius": 18, "height": 64, "width": "fill"})
+            button("⌫", click_pannumbodhu=backspace, style={"background": "#6B7280", "text_color": "#FFFFFF", "font_size": 24, "corner_radius": 18, "height": 64, "width": "fill"})
+            button("÷", click_pannumbodhu=divide, style={"background": "#F59E0B", "text_color": "#FFFFFF", "font_size": 26, "corner_radius": 18, "height": 64, "width": "fill"})
+        row_uruvakku(style={"gap": 10}):
+            button("7", click_pannumbodhu=d7, style={"background": "#374151", "text_color": "#FFFFFF", "font_size": 26, "corner_radius": 18, "height": 64, "width": "fill"})
+            button("8", click_pannumbodhu=d8, style={"background": "#374151", "text_color": "#FFFFFF", "font_size": 26, "corner_radius": 18, "height": 64, "width": "fill"})
+            button("9", click_pannumbodhu=d9, style={"background": "#374151", "text_color": "#FFFFFF", "font_size": 26, "corner_radius": 18, "height": 64, "width": "fill"})
+            button("×", click_pannumbodhu=times, style={"background": "#F59E0B", "text_color": "#FFFFFF", "font_size": 26, "corner_radius": 18, "height": 64, "width": "fill"})
+        row_uruvakku(style={"gap": 10}):
+            button("4", click_pannumbodhu=d4, style={"background": "#374151", "text_color": "#FFFFFF", "font_size": 26, "corner_radius": 18, "height": 64, "width": "fill"})
+            button("5", click_pannumbodhu=d5, style={"background": "#374151", "text_color": "#FFFFFF", "font_size": 26, "corner_radius": 18, "height": 64, "width": "fill"})
+            button("6", click_pannumbodhu=d6, style={"background": "#374151", "text_color": "#FFFFFF", "font_size": 26, "corner_radius": 18, "height": 64, "width": "fill"})
+            button("−", click_pannumbodhu=minus, style={"background": "#F59E0B", "text_color": "#FFFFFF", "font_size": 26, "corner_radius": 18, "height": 64, "width": "fill"})
+        row_uruvakku(style={"gap": 10}):
+            button("1", click_pannumbodhu=d1, style={"background": "#374151", "text_color": "#FFFFFF", "font_size": 26, "corner_radius": 18, "height": 64, "width": "fill"})
+            button("2", click_pannumbodhu=d2, style={"background": "#374151", "text_color": "#FFFFFF", "font_size": 26, "corner_radius": 18, "height": 64, "width": "fill"})
+            button("3", click_pannumbodhu=d3, style={"background": "#374151", "text_color": "#FFFFFF", "font_size": 26, "corner_radius": 18, "height": 64, "width": "fill"})
+            button("+", click_pannumbodhu=plus, style={"background": "#F59E0B", "text_color": "#FFFFFF", "font_size": 26, "corner_radius": 18, "height": 64, "width": "fill"})
+        row_uruvakku(style={"gap": 10}):
+            button("0", click_pannumbodhu=d0, style={"background": "#374151", "text_color": "#FFFFFF", "font_size": 26, "corner_radius": 18, "height": 64, "width": "fill"})
+            button(".", click_pannumbodhu=press_dot, style={"background": "#374151", "text_color": "#FFFFFF", "font_size": 26, "corner_radius": 18, "height": 64, "width": "fill"})
+            button("=", click_pannumbodhu=equals, style={"background": "#10B981", "text_color": "#FFFFFF", "font_size": 28, "corner_radius": 18, "height": 64, "width": "fill"})
