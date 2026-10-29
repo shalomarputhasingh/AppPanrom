@@ -372,3 +372,88 @@ test('calculator example does real arithmetic through its key handlers', () => {
   assert.equal(calc(['1', '-', '2', '=']).main, '-1');
   assert.equal(calc(['2', '+', '+', '5', '=']).main, '7', 'changing the operator keeps the number');
 });
+
+test('Naal Planner example: dashboard, search, filters, actions, add, stats and persistence', () => {
+  const src = readFileSync(new URL('../../examples/naal_planner.apn', import.meta.url), 'utf8');
+  const storage = AP.memoryStorage();
+  const texts = (rt) => flat(rt.render()).filter((n) => n.c === 'text_kaattu').map((n) => n.props.text);
+  const titlesShown = (rt) => flat(rt.render()).filter((n) => n.c === 'text_kaattu' && n.style.font_size === 17).map((n) => n.props.text);
+  const mk = () => boot(src, { storage, namespace: 'naal' });
+  let { rt, toasts } = mk();
+
+  // seeded dashboard
+  assert.ok(texts(rt).includes('2 of 6 tasks done'));
+  assert.ok(texts(rt).some((t) => t.startsWith('Let\'s get moving')));
+  assert.equal(texts(rt).find((t) => t.startsWith('Next up')), 'Next up: Gym-la 30 min workout');
+  // sorted: active by priority first, finished last
+  assert.deepEqual(titlesShown(rt), ['Gym-la 30 min workout', 'College project report', 'Weekly groceries vaanga', 'Read 20 pages', 'Amma-kku phone panna', 'Team standup notes']);
+
+  // filters
+  rt.fire('filter_active');
+  assert.equal(titlesShown(rt).length, 4);
+  rt.fire('filter_done');
+  assert.deepEqual(titlesShown(rt), ['Amma-kku phone panna', 'Team standup notes']);
+  rt.fire('filter_all');
+  // search (case-insensitive, combines with the filter)
+  rt.setInputFromUI('search', 'GYM');
+  assert.deepEqual(titlesShown(rt), ['Gym-la 30 min workout']);
+  rt.setInputFromUI('search', 'zzz');
+  assert.ok(texts(rt).includes('🌱 Nothing here'));
+  rt.setInputFromUI('search', '');
+
+  // quick actions: toggle, delete, clear completed
+  rt.setInputFromUI('pick', 'College project report');
+  rt.fire('toggle_selected');
+  assert.ok(texts(rt).includes('3 of 6 tasks done'));
+  rt.fire('toggle_selected');
+  assert.ok(texts(rt).includes('2 of 6 tasks done'));
+  rt.fire('clear_done');
+  assert.ok(texts(rt).includes('0 of 4 tasks done'));
+  rt.setInputFromUI('pick', 'Read 20 pages');
+  rt.fire('delete_selected');
+  assert.equal(titlesShown(rt).length, 3);
+
+  // add: validation, duplicates, success + navigation
+  rt.fire('go_add');
+  assert.equal(rt.currentScreen(), 'add');
+  rt.fire('add_task');
+  assert.equal(toasts.at(-1), 'Task name enter pannu da');
+  rt.setInputFromUI('new_title', '  gym-LA 30 min workout ');
+  rt.fire('add_task');
+  assert.match(toasts.at(-1), /Already irukku/);
+  rt.setInputFromUI('new_title', 'Buy milk');
+  rt.setInputFromUI('new_prio', 'High');
+  rt.setInputFromUI('new_cat', 'Health');
+  rt.fire('add_task');
+  assert.equal(rt.currentScreen(), 'home');
+  assert.deepEqual(titlesShown(rt).slice(0, 3), ['Gym-la 30 min workout', 'College project report', 'Buy milk'], 'new High task joins the top priority tier');
+  assert.equal(rt.getInput('new_title'), '', 'form is cleared');
+
+  // stats
+  rt.fire('go_stats');
+  const st = flat(rt.render());
+  assert.ok(st.some((n) => n.c === 'text_kaattu' && n.props.text === 'High  •  0/3 done'));
+  assert.ok(st.some((n) => n.c === 'progress_kaattu'));
+  rt.fire('go_home');
+
+  // settings: accent colour is applied and saved
+  rt.fire('go_settings');
+  rt.setInputFromUI('accent_pick', 'Teal');
+  rt.fire('set_accent');
+  assert.equal(flat(rt.render()).some((n) => n.style.background === '#14B8A6'), true, 'accent colour is applied');
+
+  // persistence across launches
+  const second = mk();
+  const t2 = flat(second.rt.render()).filter((n) => n.c === 'text_kaattu' && n.style.font_size === 17).map((n) => n.props.text);
+  assert.ok(t2.includes('Buy milk'), 'tasks survive a restart');
+  assert.equal(flat(second.rt.render()).some((n) => n.style.background === '#14B8A6'), true, 'accent survives a restart');
+
+  // reset + wipe
+  second.rt.fire('reset_demo');
+  assert.ok(flat(second.rt.render()).some((n) => n.props.text === '2 of 6 tasks done'));
+  second.rt.fire('wipe_all');
+  const empty = flat(second.rt.render());
+  assert.ok(empty.some((n) => n.props.text === '0 of 0 tasks done'));
+  assert.ok(empty.some((n) => n.props.text === 'No tasks yet. Add your first one!'));
+  assert.ok(empty.every((n) => n.c !== 'dropdown_uruvakku'), 'quick actions are hidden when there are no tasks');
+});

@@ -158,6 +158,7 @@ literals, and for dynamic values the offending key is ignored with a console war
 |---|---|
 | box | `background`, `padding`, `margin`, `width`, `height`, `corner_radius`, `border_width`, `border_color`, `opacity`, `visible` |
 | text | `text_color`, `font_size`, `font_weight`, `text_align` |
+| color | `text_color` (progress bar fill) |
 | flow | `gap`, `align`, `justify`, `wrap`, `scroll` |
 
 | Key | Value |

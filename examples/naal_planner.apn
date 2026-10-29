@@ -1,0 +1,353 @@
+# Naal Planner - a task planner with a dashboard, search, filters, statistics and accent colours.
+# Everything is saved on the phone (data_save_pannu). Written entirely in AppPanrom (Tanglish).
+app_uruvakku("Naal Planner")
+app_id_set("com.apppanrom.naalplanner")
+app_version_set("1.0.0")
+app_theme_set("dark")
+
+mari tasks = load_tasks()
+mari accent_name = data_edu("accent", "Indigo")
+mari current_filter = "All"
+
+# ------------------------------------------------------------------ data
+function seed_tasks():
+    return [
+        {"title": "Gym-la 30 min workout", "prio": "High", "cat": "Health", "done": false},
+        {"title": "College project report", "prio": "High", "cat": "Study", "done": false},
+        {"title": "Amma-kku phone panna", "prio": "Medium", "cat": "Personal", "done": true},
+        {"title": "Weekly groceries vaanga", "prio": "Low", "cat": "Personal", "done": false},
+        {"title": "Team standup notes", "prio": "Medium", "cat": "Work", "done": true},
+        {"title": "Read 20 pages", "prio": "Low", "cat": "Study", "done": false}
+    ]
+
+function load_tasks():
+    return data_edu("tasks", seed_tasks())
+
+function persist():
+    data_save_pannu("tasks", tasks)
+
+# ------------------------------------------------------------------ theme (always dark, accent is chosen in Settings)
+function accent():
+    enna_na accent_name == "Pink":
+        return "#EC4899"
+    illana_enna accent_name == "Teal":
+        return "#14B8A6"
+    illana_enna accent_name == "Orange":
+        return "#F97316"
+    return "#6366F1"
+
+function bg():
+    return "#0B1020"
+
+function card_bg():
+    return "#151C33"
+
+function ink():
+    return "#F8FAFC"
+
+function muted():
+    return "#94A3B8"
+
+function edge():
+    return "#26304F"
+
+function prio_color(p):
+    enna_na p == "High":
+        return "#F43F5E"
+    illana_enna p == "Medium":
+        return "#F59E0B"
+    return "#10B981"
+
+function tab_bg(name, active):
+    enna_na name == active:
+        return accent()
+    return card_bg()
+
+function tab_ink(name, active):
+    enna_na name == active:
+        return "#FFFFFF"
+    return muted()
+
+function chip_bg(name):
+    enna_na name == current_filter:
+        return accent()
+    return card_bg()
+
+function chip_ink(name):
+    enna_na name == current_filter:
+        return "#FFFFFF"
+    return muted()
+
+# ------------------------------------------------------------------ queries
+function total_count():
+    return length(tasks)
+
+function done_count():
+    mari n = 0
+    ovvoru t in tasks:
+        enna_na t["done"]:
+            n = n + 1
+    return n
+
+function percent_done():
+    enna_na total_count() == 0:
+        return 0
+    return round(done_count() * 100 / total_count())
+
+function matches(t, q):
+    enna_na current_filter == "Active" and t["done"]:
+        return false
+    enna_na current_filter == "Done" and not t["done"]:
+        return false
+    enna_na q != "" and not text_contains(text_lower(t["title"]), q):
+        return false
+    return true
+
+function visible_tasks():
+    mari q = text_lower(text_trim(input_value("search")))
+    mari out = []
+    ovvoru finished in [false, true]:
+        ovvoru p in ["High", "Medium", "Low"]:
+            ovvoru t in tasks:
+                enna_na t["done"] == finished and t["prio"] == p and matches(t, q):
+                    append(out, t)
+    return out
+
+function titles():
+    mari out = []
+    ovvoru t in tasks:
+        append(out, t["title"])
+    return out
+
+function count_where(field, value, only_done):
+    mari n = 0
+    ovvoru t in tasks:
+        enna_na t[field] == value and (t["done"] or not only_done):
+            n = n + 1
+    return n
+
+function share(field, value):
+    mari all_n = count_where(field, value, false)
+    enna_na all_n == 0:
+        return 0
+    return round(count_where(field, value, true) * 100 / all_n)
+
+function status_icon(t):
+    enna_na t["done"]:
+        return "✅"
+    return "⚪"
+
+function focus_text():
+    ovvoru p in ["High", "Medium", "Low"]:
+        ovvoru t in tasks:
+            enna_na not t["done"] and t["prio"] == p:
+                return "Next up: " + t["title"]
+    enna_na total_count() == 0:
+        return "No tasks yet. Add your first one!"
+    return "All done. Semma mass!"
+
+function hero_message():
+    enna_na total_count() == 0:
+        return "Fresh start"
+    enna_na percent_done() == 100:
+        return "Everything finished 🎉"
+    enna_na percent_done() >= 50:
+        return "More than halfway there"
+    return "Let's get moving"
+
+# ------------------------------------------------------------------ actions
+function go_home():
+    screen_ku_poo("home")
+
+function go_add():
+    screen_ku_poo("add")
+
+function go_stats():
+    screen_ku_poo("stats")
+
+function go_settings():
+    screen_ku_poo("settings")
+
+function filter_all():
+    current_filter = "All"
+
+function filter_active():
+    current_filter = "Active"
+
+function filter_done():
+    current_filter = "Done"
+
+function toggle_selected():
+    enna_na total_count() == 0:
+        return
+    mari name = input_value("pick")
+    ovvoru i in range(length(tasks)):
+        enna_na tasks[i]["title"] == name:
+            tasks[i]["done"] = not tasks[i]["done"]
+    persist()
+
+function delete_selected():
+    enna_na total_count() == 0:
+        return
+    mari name = input_value("pick")
+    mari kept = []
+    ovvoru t in tasks:
+        enna_na t["title"] != name:
+            append(kept, t)
+    tasks = kept
+    persist()
+    toast_kaattu("Task deleted")
+
+function clear_done():
+    mari kept = []
+    ovvoru t in tasks:
+        enna_na not t["done"]:
+            append(kept, t)
+    tasks = kept
+    persist()
+    toast_kaattu("Completed tasks cleared")
+
+function add_task():
+    mari title = text_trim(input_value("new_title"))
+    enna_na title == "":
+        toast_kaattu("Task name enter pannu da")
+        return
+    ovvoru t in tasks:
+        enna_na text_lower(t["title"]) == text_lower(title):
+            toast_kaattu("Already irukku: " + title)
+            return
+    append(tasks, {"title": title, "prio": input_value("new_prio"), "cat": input_value("new_cat"), "done": false})
+    persist()
+    input_set("new_title", "")
+    current_filter = "All"
+    toast_kaattu("Task added")
+    screen_ku_poo("home")
+
+function set_accent():
+    accent_name = input_value("accent_pick")
+    data_save_pannu("accent", accent_name)
+
+function reset_demo():
+    tasks = seed_tasks()
+    persist()
+    toast_kaattu("Demo tasks restored")
+
+function wipe_all():
+    tasks = []
+    persist()
+    toast_kaattu("All tasks deleted")
+
+# ------------------------------------------------------------------ screens
+screen_uruvakku("home", style={"background": bg()}):
+    screen_title("Naal Planner")
+    column_uruvakku(style={"padding": 16, "gap": 14}):
+        row_uruvakku(style={"gap": 8}):
+            button("Home", click_pannumbodhu=go_home, style={"background": tab_bg("home", "home"), "text_color": tab_ink("home", "home"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+            button("Add", click_pannumbodhu=go_add, style={"background": tab_bg("add", "home"), "text_color": tab_ink("add", "home"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+            button("Stats", click_pannumbodhu=go_stats, style={"background": tab_bg("stats", "home"), "text_color": tab_ink("stats", "home"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+            button("Settings", click_pannumbodhu=go_settings, style={"background": tab_bg("settings", "home"), "text_color": tab_ink("settings", "home"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+        text_kaattu("Vanakkam, Machan 👋", style={"text_color": ink(), "font_size": 26, "font_weight": "bold"})
+        card_uruvakku(style={"background": accent(), "padding": 18, "gap": 8, "corner_radius": 24, "border_width": 0}):
+            text_kaattu("TODAY'S PROGRESS", style={"text_color": "#E0E7FF", "font_size": 12, "font_weight": "bold"})
+            text_kaattu(str(done_count()) + " of " + str(total_count()) + " tasks done", style={"text_color": "#FFFFFF", "font_size": 24, "font_weight": "bold"})
+            progress_kaattu(percent_done(), style={"text_color": "#FFFFFF"})
+            text_kaattu(hero_message() + "  •  " + str(percent_done()) + "%", style={"text_color": "#E0E7FF", "font_size": 14})
+        card_uruvakku(style={"background": card_bg(), "padding": 14, "gap": 4, "corner_radius": 18, "border_color": edge()}):
+            text_kaattu("🎯 FOCUS", style={"text_color": muted(), "font_size": 12, "font_weight": "bold"})
+            text_kaattu(focus_text(), style={"text_color": ink(), "font_size": 16})
+        input_uruvakku("search", label="Search tasks", placeholder="Type to filter...")
+        row_uruvakku(style={"gap": 8}):
+            button("All", click_pannumbodhu=filter_all, style={"background": chip_bg("All"), "text_color": chip_ink("All"), "corner_radius": 20, "height": 40, "width": "fill"})
+            button("Active", click_pannumbodhu=filter_active, style={"background": chip_bg("Active"), "text_color": chip_ink("Active"), "corner_radius": 20, "height": 40, "width": "fill"})
+            button("Done", click_pannumbodhu=filter_done, style={"background": chip_bg("Done"), "text_color": chip_ink("Done"), "corner_radius": 20, "height": 40, "width": "fill"})
+        enna_na length(visible_tasks()) == 0:
+            card_uruvakku(style={"background": card_bg(), "padding": 24, "gap": 6, "corner_radius": 18, "border_color": edge()}):
+                text_kaattu("🌱 Nothing here", style={"text_color": ink(), "font_size": 18, "font_weight": "bold", "text_align": "center"})
+                text_kaattu("Add a task or change the filter.", style={"text_color": muted(), "text_align": "center"})
+        illana:
+            ovvoru t in visible_tasks():
+                card_uruvakku(style={"background": card_bg(), "padding": 14, "gap": 8, "corner_radius": 18, "border_color": prio_color(t["prio"]), "border_width": 1}):
+                    row_uruvakku(style={"gap": 10, "align": "center"}):
+                        text_kaattu(status_icon(t), style={"font_size": 20})
+                        text_kaattu(t["title"], style={"text_color": ink(), "font_size": 17, "font_weight": "bold"})
+                    row_uruvakku(style={"gap": 8}):
+                        card_uruvakku(style={"background": prio_color(t["prio"]), "padding": 5, "corner_radius": 10, "border_width": 0}):
+                            text_kaattu(t["prio"], style={"text_color": "#FFFFFF", "font_size": 12, "font_weight": "bold"})
+                        card_uruvakku(style={"background": edge(), "padding": 5, "corner_radius": 10, "border_width": 0}):
+                            text_kaattu(t["cat"], style={"text_color": muted(), "font_size": 12, "font_weight": "bold"})
+        enna_na total_count() > 0:
+            card_uruvakku(style={"background": card_bg(), "padding": 14, "gap": 10, "corner_radius": 18, "border_color": edge()}):
+                text_kaattu("QUICK ACTIONS", style={"text_color": muted(), "font_size": 12, "font_weight": "bold"})
+                dropdown_uruvakku("pick", options=titles(), label="Choose a task")
+                row_uruvakku(style={"gap": 8}):
+                    button("✔ Done / Undo", click_pannumbodhu=toggle_selected, style={"background": accent(), "text_color": "#FFFFFF", "corner_radius": 14, "height": 46, "width": "fill"})
+                    button("🗑 Delete", click_pannumbodhu=delete_selected, style={"background": "#F43F5E", "text_color": "#FFFFFF", "corner_radius": 14, "height": 46, "width": "fill"})
+                button("Clear completed", click_pannumbodhu=clear_done, style={"background": edge(), "text_color": ink(), "corner_radius": 14, "height": 44})
+
+screen_uruvakku("add", style={"background": bg()}):
+    screen_title("New task")
+    column_uruvakku(style={"padding": 16, "gap": 14}):
+        row_uruvakku(style={"gap": 8}):
+            button("Home", click_pannumbodhu=go_home, style={"background": tab_bg("home", "add"), "text_color": tab_ink("home", "add"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+            button("Add", click_pannumbodhu=go_add, style={"background": tab_bg("add", "add"), "text_color": tab_ink("add", "add"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+            button("Stats", click_pannumbodhu=go_stats, style={"background": tab_bg("stats", "add"), "text_color": tab_ink("stats", "add"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+            button("Settings", click_pannumbodhu=go_settings, style={"background": tab_bg("settings", "add"), "text_color": tab_ink("settings", "add"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+        text_kaattu("What needs doing?", style={"text_color": ink(), "font_size": 26, "font_weight": "bold"})
+        card_uruvakku(style={"background": card_bg(), "padding": 16, "gap": 12, "corner_radius": 20, "border_color": edge()}):
+            input_uruvakku("new_title", label="Task name", placeholder="e.g. Finish the report", submit_pannumbodhu=add_task)
+            dropdown_uruvakku("new_prio", options=["High", "Medium", "Low"], label="Priority", initial="Medium")
+            dropdown_uruvakku("new_cat", options=["Work", "Study", "Personal", "Health"], label="Category")
+            button("Save task", click_pannumbodhu=add_task, style={"background": accent(), "text_color": "#FFFFFF", "font_size": 17, "font_weight": "bold", "corner_radius": 16, "height": 52})
+        text_kaattu("Tip: High priority tasks always float to the top of your list.", style={"text_color": muted(), "font_size": 13})
+
+screen_uruvakku("stats", style={"background": bg()}):
+    screen_title("Statistics")
+    column_uruvakku(style={"padding": 16, "gap": 14}):
+        row_uruvakku(style={"gap": 8}):
+            button("Home", click_pannumbodhu=go_home, style={"background": tab_bg("home", "stats"), "text_color": tab_ink("home", "stats"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+            button("Add", click_pannumbodhu=go_add, style={"background": tab_bg("add", "stats"), "text_color": tab_ink("add", "stats"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+            button("Stats", click_pannumbodhu=go_stats, style={"background": tab_bg("stats", "stats"), "text_color": tab_ink("stats", "stats"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+            button("Settings", click_pannumbodhu=go_settings, style={"background": tab_bg("settings", "stats"), "text_color": tab_ink("settings", "stats"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+        text_kaattu("Your numbers", style={"text_color": ink(), "font_size": 26, "font_weight": "bold"})
+        row_uruvakku(style={"gap": 10}):
+            card_uruvakku(style={"background": accent(), "padding": 14, "gap": 2, "corner_radius": 18, "border_width": 0, "width": "fill"}):
+                text_kaattu(str(total_count()), style={"text_color": "#FFFFFF", "font_size": 32, "font_weight": "bold"})
+                text_kaattu("Total", style={"text_color": "#E0E7FF", "font_size": 13})
+            card_uruvakku(style={"background": "#10B981", "padding": 14, "gap": 2, "corner_radius": 18, "border_width": 0, "width": "fill"}):
+                text_kaattu(str(done_count()), style={"text_color": "#FFFFFF", "font_size": 32, "font_weight": "bold"})
+                text_kaattu("Done", style={"text_color": "#D1FAE5", "font_size": 13})
+            card_uruvakku(style={"background": "#F59E0B", "padding": 14, "gap": 2, "corner_radius": 18, "border_width": 0, "width": "fill"}):
+                text_kaattu(str(total_count() - done_count()), style={"text_color": "#FFFFFF", "font_size": 32, "font_weight": "bold"})
+                text_kaattu("Pending", style={"text_color": "#FEF3C7", "font_size": 13})
+        card_uruvakku(style={"background": card_bg(), "padding": 16, "gap": 10, "corner_radius": 20, "border_color": edge()}):
+            text_kaattu("COMPLETION BY PRIORITY", style={"text_color": muted(), "font_size": 12, "font_weight": "bold"})
+            ovvoru p in ["High", "Medium", "Low"]:
+                text_kaattu(p + "  •  " + str(count_where("prio", p, true)) + "/" + str(count_where("prio", p, false)) + " done", style={"text_color": ink(), "font_size": 15})
+                progress_kaattu(share("prio", p), style={"text_color": prio_color(p)})
+        card_uruvakku(style={"background": card_bg(), "padding": 16, "gap": 10, "corner_radius": 20, "border_color": edge()}):
+            text_kaattu("COMPLETION BY CATEGORY", style={"text_color": muted(), "font_size": 12, "font_weight": "bold"})
+            ovvoru c in ["Work", "Study", "Personal", "Health"]:
+                text_kaattu(c + "  •  " + str(count_where("cat", c, true)) + "/" + str(count_where("cat", c, false)) + " done", style={"text_color": ink(), "font_size": 15})
+                progress_kaattu(share("cat", c), style={"text_color": accent()})
+
+screen_uruvakku("settings", style={"background": bg()}):
+    screen_title("Settings")
+    column_uruvakku(style={"padding": 16, "gap": 14}):
+        row_uruvakku(style={"gap": 8}):
+            button("Home", click_pannumbodhu=go_home, style={"background": tab_bg("home", "settings"), "text_color": tab_ink("home", "settings"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+            button("Add", click_pannumbodhu=go_add, style={"background": tab_bg("add", "settings"), "text_color": tab_ink("add", "settings"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+            button("Stats", click_pannumbodhu=go_stats, style={"background": tab_bg("stats", "settings"), "text_color": tab_ink("stats", "settings"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+            button("Settings", click_pannumbodhu=go_settings, style={"background": tab_bg("settings", "settings"), "text_color": tab_ink("settings", "settings"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+        text_kaattu("Make it yours", style={"text_color": ink(), "font_size": 26, "font_weight": "bold"})
+        card_uruvakku(style={"background": card_bg(), "padding": 16, "gap": 12, "corner_radius": 20, "border_color": edge()}):
+            text_kaattu("ACCENT COLOUR", style={"text_color": muted(), "font_size": 12, "font_weight": "bold"})
+            dropdown_uruvakku("accent_pick", options=["Indigo", "Pink", "Teal", "Orange"], initial=accent_name, change_aagumbodhu=set_accent)
+            card_uruvakku(style={"background": accent(), "padding": 12, "corner_radius": 14, "border_width": 0}):
+                text_kaattu("Preview: this is your accent", style={"text_color": "#FFFFFF", "font_weight": "bold", "text_align": "center"})
+        card_uruvakku(style={"background": card_bg(), "padding": 16, "gap": 10, "corner_radius": 20, "border_color": edge()}):
+            text_kaattu("DATA", style={"text_color": muted(), "font_size": 12, "font_weight": "bold"})
+            button("Restore demo tasks", click_pannumbodhu=reset_demo, style={"background": edge(), "text_color": ink(), "corner_radius": 14, "height": 46})
+            button("Delete all tasks", click_pannumbodhu=wipe_all, style={"background": "#F43F5E", "text_color": "#FFFFFF", "corner_radius": 14, "height": 46})
+        card_uruvakku(style={"background": card_bg(), "padding": 16, "gap": 4, "corner_radius": 20, "border_color": edge()}):
+            text_kaattu("Naal Planner 1.0", style={"text_color": ink(), "font_weight": "bold"})
+            text_kaattu("Built with AppPanrom. Your tasks are stored only on this phone.", style={"text_color": muted(), "font_size": 13})

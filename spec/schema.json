@@ -61,6 +61,9 @@
       "justify",
       "wrap",
       "scroll"
+    ],
+    "color": [
+      "text_color"
     ]
   },
   "styles": {
@@ -428,9 +431,10 @@
       },
       "events": [],
       "style_groups": [
-        "box"
+        "box",
+        "color"
       ],
-      "doc": "progress_kaattu(value, label=\"\") - value from 0 to 100"
+      "doc": "progress_kaattu(value, label=\"\", style={}) - bar from 0 to 100; style text_color sets the bar colour"
     },
     "loading_kaattu": {
       "container": false,
