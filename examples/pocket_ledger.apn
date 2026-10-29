@@ -1,0 +1,272 @@
+# Pocket Ledger - an expense tracker with a monthly budget, category breakdown and history.
+# Everything is saved on the phone. Written entirely in AppPanrom.
+app_uruvakku("Pocket Ledger")
+app_id_set("com.apppanrom.pocketledger")
+app_version_set("1.0.0")
+app_theme_set("dark")
+
+mari expenses = data_edu("expenses", sample_expenses())
+mari budget = data_edu("budget", 1500)
+
+function sample_expenses():
+    return [
+        {"amount": 48.5, "cat": "Food", "note": "Groceries"},
+        {"amount": 12, "cat": "Transport", "note": "Metro card"},
+        {"amount": 129.99, "cat": "Shopping", "note": "Running shoes"},
+        {"amount": 85, "cat": "Bills", "note": "Internet"},
+        {"amount": 24.75, "cat": "Fun", "note": "Movie night"},
+        {"amount": 36.2, "cat": "Food", "note": "Dinner with friends"}
+    ]
+
+function persist():
+    data_save_pannu("expenses", expenses)
+
+# ------------------------------------------------------------------ look
+function bg():
+    return "#0A1210"
+
+function card_bg():
+    return "#12201C"
+
+function edge():
+    return "#1F3A33"
+
+function ink():
+    return "#F0FDF4"
+
+function muted():
+    return "#86A89C"
+
+function accent():
+    return "#10B981"
+
+function cat_color(c):
+    enna_na c == "Food":
+        return "#F59E0B"
+    illana_enna c == "Transport":
+        return "#38BDF8"
+    illana_enna c == "Shopping":
+        return "#F472B6"
+    illana_enna c == "Bills":
+        return "#A78BFA"
+    illana_enna c == "Fun":
+        return "#FB7185"
+    return "#94A3B8"
+
+function cat_icon(c):
+    enna_na c == "Food":
+        return "🍔"
+    illana_enna c == "Transport":
+        return "🚇"
+    illana_enna c == "Shopping":
+        return "🛍"
+    illana_enna c == "Bills":
+        return "💡"
+    illana_enna c == "Fun":
+        return "🎬"
+    return "📦"
+
+function tab_bg(name, active):
+    enna_na name == active:
+        return accent()
+    return card_bg()
+
+function tab_ink(name, active):
+    enna_na name == active:
+        return "#04120D"
+    return muted()
+
+# ------------------------------------------------------------------ numbers
+function money(n):
+    mari parts = text_split(str(round(n, 2)), ".")
+    enna_na length(parts) == 1:
+        return "$" + parts[0] + ".00"
+    enna_na text_length(parts[1]) == 1:
+        return "$" + parts[0] + "." + parts[1] + "0"
+    return "$" + parts[0] + "." + parts[1]
+
+function total_spent():
+    mari t = 0
+    ovvoru e in expenses:
+        t = t + e["amount"]
+    return t
+
+function spent_in(c):
+    mari t = 0
+    ovvoru e in expenses:
+        enna_na e["cat"] == c:
+            t = t + e["amount"]
+    return t
+
+function budget_percent():
+    enna_na budget <= 0:
+        return 0
+    return min(100, round(total_spent() * 100 / budget))
+
+function remaining():
+    return budget - total_spent()
+
+function budget_color():
+    enna_na remaining() < 0:
+        return "#F43F5E"
+    enna_na budget_percent() >= 80:
+        return "#F59E0B"
+    return accent()
+
+function budget_message():
+    enna_na remaining() < 0:
+        return "Over budget by " + money(0 - remaining())
+    enna_na budget_percent() >= 80:
+        return "Careful: only " + money(remaining()) + " left"
+    return money(remaining()) + " left to spend"
+
+function biggest_category():
+    mari best = "None yet"
+    mari best_amount = 0
+    ovvoru c in ["Food", "Transport", "Shopping", "Bills", "Fun", "Other"]:
+        enna_na spent_in(c) > best_amount:
+            best = c
+            best_amount = spent_in(c)
+    return best
+
+function category_share(c):
+    enna_na total_spent() == 0:
+        return 0
+    return round(spent_in(c) * 100 / total_spent())
+
+function recent():
+    mari out = []
+    mari i = length(expenses) - 1
+    irukkura_varai i >= 0 and length(out) < 8:
+        append(out, expenses[i])
+        i = i - 1
+    return out
+
+# ------------------------------------------------------------------ actions
+function go_home():
+    screen_ku_poo("home")
+
+function go_add():
+    screen_ku_poo("add")
+
+function go_budget():
+    screen_ku_poo("budget")
+
+function save_expense():
+    mari amount = input_value("amount")
+    enna_na amount == null or amount <= 0:
+        toast_kaattu("Enter an amount greater than zero")
+        return
+    mari note = text_trim(input_value("note"))
+    enna_na note == "":
+        note = input_value("category")
+    append(expenses, {"amount": amount, "cat": input_value("category"), "note": note})
+    persist()
+    input_set("amount", null)
+    input_set("note", "")
+    toast_kaattu("Expense saved")
+    screen_ku_poo("home")
+
+function undo_last():
+    enna_na length(expenses) == 0:
+        toast_kaattu("Nothing to undo")
+        return
+    remove(expenses, length(expenses) - 1)
+    persist()
+    toast_kaattu("Last expense removed")
+
+function save_budget():
+    mari value = input_value("budget_amount")
+    enna_na value == null or value <= 0:
+        toast_kaattu("Enter a budget greater than zero")
+        return
+    budget = value
+    data_save_pannu("budget", budget)
+    toast_kaattu("Budget updated")
+    screen_ku_poo("home")
+
+function clear_all():
+    expenses = []
+    persist()
+    toast_kaattu("All expenses deleted")
+
+function restore_samples():
+    expenses = sample_expenses()
+    persist()
+    toast_kaattu("Sample expenses restored")
+
+# ------------------------------------------------------------------ screens
+screen_uruvakku("home", style={"background": bg()}):
+    screen_title("Pocket Ledger")
+    column_uruvakku(style={"padding": 16, "gap": 14}):
+        row_uruvakku(style={"gap": 8}):
+            button("Overview", click_pannumbodhu=go_home, style={"background": tab_bg("home", "home"), "text_color": tab_ink("home", "home"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+            button("Add", click_pannumbodhu=go_add, style={"background": tab_bg("add", "home"), "text_color": tab_ink("add", "home"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+            button("Budget", click_pannumbodhu=go_budget, style={"background": tab_bg("budget", "home"), "text_color": tab_ink("budget", "home"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+        card_uruvakku(style={"background": card_bg(), "padding": 18, "gap": 8, "corner_radius": 24, "border_color": edge()}):
+            text_kaattu("SPENT THIS MONTH", style={"text_color": muted(), "font_size": 12, "font_weight": "bold"})
+            text_kaattu(money(total_spent()), style={"text_color": ink(), "font_size": 40, "font_weight": "bold"})
+            progress_kaattu(budget_percent(), style={"text_color": budget_color()})
+            row_uruvakku(style={"gap": 8, "justify": "space_between"}):
+                text_kaattu(budget_message(), style={"text_color": budget_color(), "font_size": 14, "font_weight": "bold"})
+                text_kaattu("of " + money(budget), style={"text_color": muted(), "font_size": 14})
+        row_uruvakku(style={"gap": 10}):
+            card_uruvakku(style={"background": card_bg(), "padding": 14, "gap": 2, "corner_radius": 18, "border_color": edge(), "width": "fill"}):
+                text_kaattu("Expenses", style={"text_color": muted(), "font_size": 12})
+                text_kaattu(str(length(expenses)), style={"text_color": ink(), "font_size": 26, "font_weight": "bold"})
+            card_uruvakku(style={"background": card_bg(), "padding": 14, "gap": 2, "corner_radius": 18, "border_color": edge(), "width": "fill"}):
+                text_kaattu("Top category", style={"text_color": muted(), "font_size": 12})
+                text_kaattu(biggest_category(), style={"text_color": ink(), "font_size": 20, "font_weight": "bold"})
+        card_uruvakku(style={"background": card_bg(), "padding": 16, "gap": 10, "corner_radius": 20, "border_color": edge()}):
+            text_kaattu("WHERE IT WENT", style={"text_color": muted(), "font_size": 12, "font_weight": "bold"})
+            ovvoru c in ["Food", "Transport", "Shopping", "Bills", "Fun", "Other"]:
+                row_uruvakku(style={"gap": 8, "justify": "space_between"}):
+                    text_kaattu(cat_icon(c) + "  " + c, style={"text_color": ink(), "font_size": 15})
+                    text_kaattu(money(spent_in(c)) + "  ·  " + str(category_share(c)) + "%", style={"text_color": muted(), "font_size": 14})
+                progress_kaattu(category_share(c), style={"text_color": cat_color(c)})
+        text_kaattu("RECENT", style={"text_color": muted(), "font_size": 12, "font_weight": "bold"})
+        enna_na length(expenses) == 0:
+            card_uruvakku(style={"background": card_bg(), "padding": 22, "corner_radius": 18, "border_color": edge()}):
+                text_kaattu("No expenses yet. Tap “Add expense” to log your first one.", style={"text_color": muted(), "text_align": "center"})
+        illana:
+            ovvoru e in recent():
+                card_uruvakku(style={"background": card_bg(), "padding": 12, "corner_radius": 16, "border_color": edge()}):
+                    row_uruvakku(style={"gap": 12, "align": "center", "justify": "space_between"}):
+                        row_uruvakku(style={"gap": 12, "align": "center"}):
+                            text_kaattu(cat_icon(e["cat"]), style={"font_size": 24})
+                            column_uruvakku(style={"gap": 0}):
+                                text_kaattu(e["note"], style={"text_color": ink(), "font_size": 16, "font_weight": "bold"})
+                                text_kaattu(e["cat"], style={"text_color": cat_color(e["cat"]), "font_size": 12, "font_weight": "bold"})
+                        text_kaattu(money(e["amount"]), style={"text_color": ink(), "font_size": 17, "font_weight": "bold"})
+            button("Undo last expense", click_pannumbodhu=undo_last, style={"background": edge(), "text_color": ink(), "corner_radius": 14, "height": 46})
+
+screen_uruvakku("add", style={"background": bg()}):
+    screen_title("Add expense")
+    column_uruvakku(style={"padding": 16, "gap": 14}):
+        row_uruvakku(style={"gap": 8}):
+            button("Overview", click_pannumbodhu=go_home, style={"background": tab_bg("home", "add"), "text_color": tab_ink("home", "add"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+            button("Add", click_pannumbodhu=go_add, style={"background": tab_bg("add", "add"), "text_color": tab_ink("add", "add"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+            button("Budget", click_pannumbodhu=go_budget, style={"background": tab_bg("budget", "add"), "text_color": tab_ink("budget", "add"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+        text_kaattu("New expense", style={"text_color": ink(), "font_size": 26, "font_weight": "bold"})
+        card_uruvakku(style={"background": card_bg(), "padding": 16, "gap": 12, "corner_radius": 20, "border_color": edge()}):
+            number_input("amount", label="Amount ($)", placeholder="0.00")
+            dropdown_uruvakku("category", options=["Food", "Transport", "Shopping", "Bills", "Fun", "Other"], label="Category")
+            input_uruvakku("note", label="Note (optional)", placeholder="What was it for?", submit_pannumbodhu=save_expense)
+            button("Save expense", click_pannumbodhu=save_expense, style={"background": accent(), "text_color": "#04120D", "font_size": 17, "font_weight": "bold", "corner_radius": 16, "height": 52})
+
+screen_uruvakku("budget", style={"background": bg()}):
+    screen_title("Budget")
+    column_uruvakku(style={"padding": 16, "gap": 14}):
+        row_uruvakku(style={"gap": 8}):
+            button("Overview", click_pannumbodhu=go_home, style={"background": tab_bg("home", "budget"), "text_color": tab_ink("home", "budget"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+            button("Add", click_pannumbodhu=go_add, style={"background": tab_bg("add", "budget"), "text_color": tab_ink("add", "budget"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+            button("Budget", click_pannumbodhu=go_budget, style={"background": tab_bg("budget", "budget"), "text_color": tab_ink("budget", "budget"), "font_size": 13, "corner_radius": 14, "height": 44, "width": "fill"})
+        text_kaattu("Monthly budget", style={"text_color": ink(), "font_size": 26, "font_weight": "bold"})
+        card_uruvakku(style={"background": card_bg(), "padding": 16, "gap": 12, "corner_radius": 20, "border_color": edge()}):
+            text_kaattu("Current budget: " + money(budget), style={"text_color": ink(), "font_size": 17, "font_weight": "bold"})
+            number_input("budget_amount", label="New budget ($)", placeholder="1500")
+            button("Update budget", click_pannumbodhu=save_budget, style={"background": accent(), "text_color": "#04120D", "font_weight": "bold", "corner_radius": 14, "height": 48})
+        card_uruvakku(style={"background": card_bg(), "padding": 16, "gap": 10, "corner_radius": 20, "border_color": edge()}):
+            text_kaattu("DATA", style={"text_color": muted(), "font_size": 12, "font_weight": "bold"})
+            button("Restore sample expenses", click_pannumbodhu=restore_samples, style={"background": edge(), "text_color": ink(), "corner_radius": 14, "height": 46})
+            button("Delete all expenses", click_pannumbodhu=clear_all, style={"background": "#F43F5E", "text_color": "#FFFFFF", "corner_radius": 14, "height": 46})

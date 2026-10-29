@@ -6,7 +6,7 @@
  *   AppPanrom.createRuntime(ir, host)  -> headless runtime (interpreter + view tree; works in Node)
  *   AppPanrom.mount(ir, rootEl, host)  -> DOM renderer on top of a runtime
  *
- * host (all optional): { log(level, text), toast(text), message(text, done), storage, namespace }
+ * host (all optional): { log(level, text), toast(text), message(text, done), storage, namespace, now() -> Date }
  * User code is never turned into JavaScript: the IR is walked by the interpreter below.
  */
 (function (root, factory) {
@@ -392,7 +392,7 @@
         throw new ApError('json_decode: invalid JSON (' + e.message + ').');
       }
     });
-    def('now_iso', function () { return new Date().toISOString(); });
+    def('now_iso', function () { return (host.now ? host.now() : new Date()).toISOString(); });
     def('random_number', function (a) {
       need('random_number', 0, a[0], 'num'); need('random_number', 1, a[1], 'num');
       if (!Number.isInteger(a[0]) || !Number.isInteger(a[1]) || a[0] > a[1]) throw new ApError('random_number needs whole numbers with low <= high.');

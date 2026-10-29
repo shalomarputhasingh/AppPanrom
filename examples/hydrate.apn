@@ -1,0 +1,160 @@
+# Hydrate - a daily water tracker with a goal, quick-add buttons, undo and a 7-day history.
+app_uruvakku("Hydrate")
+app_id_set("com.apppanrom.hydrate")
+app_version_set("1.0.0")
+app_theme_set("light")
+
+mari today = ""
+mari drunk = data_edu("drunk", 0)
+mari goal = data_edu("goal", 2000)
+mari history = data_edu("history", [])
+mari log = data_edu("log", [])
+mari saved_day = data_edu("day", "")
+
+function bg():
+    return "#EFF8FF"
+
+function card_bg():
+    return "#FFFFFF"
+
+function edge():
+    return "#BAE0FD"
+
+function ink():
+    return "#0C2D48"
+
+function muted():
+    return "#5B84A3"
+
+function accent():
+    return "#0EA5E9"
+
+function today_text():
+    return text_split(now_iso(), "T")[0]
+
+# Called from every action: when the date changed, archive yesterday and start fresh.
+function roll_day():
+    today = today_text()
+    enna_na saved_day != "" and saved_day != today:
+        append(history, {"day": saved_day, "ml": drunk, "goal": goal})
+        enna_na length(history) > 7:
+            remove(history, 0)
+        data_save_pannu("history", history)
+        drunk = 0
+        log = []
+        data_save_pannu("drunk", 0)
+        data_save_pannu("log", log)
+    saved_day = today
+    data_save_pannu("day", today)
+
+function save_all():
+    data_save_pannu("drunk", drunk)
+    data_save_pannu("log", log)
+
+function add_water(ml):
+    roll_day()
+    drunk = drunk + ml
+    append(log, ml)
+    save_all()
+    enna_na drunk >= goal and drunk - ml < goal:
+        toast_kaattu("Goal reached! Great job 🎉")
+
+function add_150():
+    add_water(150)
+
+function add_250():
+    add_water(250)
+
+function add_500():
+    add_water(500)
+
+function undo():
+    roll_day()
+    enna_na length(log) == 0:
+        toast_kaattu("Nothing to undo")
+        return
+    mari last = log[length(log) - 1]
+    remove(log, length(log) - 1)
+    drunk = drunk - last
+    save_all()
+
+function add_custom():
+    mari v = input_value("custom_ml")
+    enna_na v == null or v <= 0:
+        toast_kaattu("Enter an amount in ml")
+        return
+    add_water(v)
+    input_set("custom_ml", null)
+
+function set_goal():
+    mari g = int(text_replace(input_value("goal_pick"), " ml", ""))
+    goal = g
+    data_save_pannu("goal", g)
+    toast_kaattu("Daily goal set to " + str(g) + " ml")
+
+function percent():
+    mari p = round(drunk * 100 / goal)
+    enna_na p > 100:
+        return 100
+    return p
+
+function litres(ml):
+    return str(round(ml / 1000, 2)) + " L"
+
+function remaining_text():
+    enna_na drunk >= goal:
+        return "Goal complete! 🎉"
+    return litres(goal - drunk) + " to go"
+
+function mood():
+    enna_na drunk == 0:
+        return "💧 Start with a glass of water"
+    enna_na percent() < 50:
+        return "🙂 Good start, keep sipping"
+    enna_na percent() < 100:
+        return "😃 More than halfway there"
+    return "🏆 You hit your goal today"
+
+function history_rows():
+    mari out = []
+    mari i = length(history) - 1
+    irukkura_varai i >= 0:
+        append(out, history[i])
+        i = i - 1
+    return out
+
+function met(h):
+    enna_na h["ml"] >= h["goal"]:
+        return "#10B981"
+    return accent()
+
+screen_uruvakku("home", style={"background": bg()}):
+    screen_title("Hydrate")
+    column_uruvakku(style={"padding": 16, "gap": 14}):
+        card_uruvakku(style={"background": accent(), "padding": 22, "gap": 6, "corner_radius": 28, "border_width": 0}):
+            text_kaattu("TODAY", style={"text_color": "#E0F2FE", "font_size": 12, "font_weight": "bold", "text_align": "center"})
+            text_kaattu(litres(drunk), style={"text_color": "#FFFFFF", "font_size": 54, "font_weight": "bold", "text_align": "center"})
+            text_kaattu(str(percent()) + "% of " + litres(goal), style={"text_color": "#E0F2FE", "font_size": 15, "text_align": "center"})
+            progress_kaattu(percent(), style={"text_color": "#FFFFFF"})
+            text_kaattu(remaining_text(), style={"text_color": "#FFFFFF", "font_size": 15, "font_weight": "bold", "text_align": "center"})
+        text_kaattu(mood(), style={"text_color": ink(), "font_size": 16, "text_align": "center"})
+        row_uruvakku(style={"gap": 10}):
+            button("+150 ml", click_pannumbodhu=add_150, style={"background": card_bg(), "text_color": accent(), "font_size": 16, "font_weight": "bold", "corner_radius": 18, "height": 56, "width": "fill", "border_color": edge(), "border_width": 1})
+            button("+250 ml", click_pannumbodhu=add_250, style={"background": card_bg(), "text_color": accent(), "font_size": 16, "font_weight": "bold", "corner_radius": 18, "height": 56, "width": "fill", "border_color": edge(), "border_width": 1})
+            button("+500 ml", click_pannumbodhu=add_500, style={"background": card_bg(), "text_color": accent(), "font_size": 16, "font_weight": "bold", "corner_radius": 18, "height": 56, "width": "fill", "border_color": edge(), "border_width": 1})
+        card_uruvakku(style={"background": card_bg(), "padding": 16, "gap": 10, "corner_radius": 24, "border_color": edge()}):
+            number_input("custom_ml", label="Custom amount (ml)", placeholder="330")
+            row_uruvakku(style={"gap": 10}):
+                button("Add", click_pannumbodhu=add_custom, style={"background": accent(), "text_color": "#FFFFFF", "font_size": 15, "font_weight": "bold", "corner_radius": 16, "height": 48, "width": "fill"})
+                button("Undo last", click_pannumbodhu=undo, style={"background": bg(), "text_color": muted(), "font_size": 15, "corner_radius": 16, "height": 48, "width": "fill", "border_color": edge(), "border_width": 1})
+        card_uruvakku(style={"background": card_bg(), "padding": 16, "gap": 10, "corner_radius": 24, "border_color": edge()}):
+            dropdown_uruvakku("goal_pick", options=["1500 ml", "2000 ml", "2500 ml", "3000 ml"], label="Daily goal", initial="2000 ml", change_aagumbodhu=set_goal)
+        text_kaattu("LAST 7 DAYS", style={"text_color": muted(), "font_size": 12, "font_weight": "bold"})
+        enna_na length(history) == 0:
+            text_kaattu("History appears here after your first full day.", style={"text_color": muted(), "font_size": 14})
+        ovvoru h in history_rows():
+            card_uruvakku(style={"background": card_bg(), "padding": 12, "gap": 6, "corner_radius": 18, "border_color": edge()}):
+                row_uruvakku(style={"gap": 8, "justify": "space_between"}):
+                    text_kaattu(h["day"], style={"text_color": ink(), "font_size": 14})
+                    text_kaattu(litres(h["ml"]), style={"text_color": met(h), "font_size": 14, "font_weight": "bold"})
+                progress_kaattu(round(min(h["ml"] * 100 / h["goal"], 100)), style={"text_color": met(h)})

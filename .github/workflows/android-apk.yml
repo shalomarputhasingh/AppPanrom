@@ -26,6 +26,10 @@ jobs:
           - { name: daily-planner, file: examples/daily_planner.apn }
           - { name: calculator, file: examples/calculator.apn }
           - { name: vanakkam, file: examples/vanakkam.apn }
+          - { name: pocket-ledger, file: examples/pocket_ledger.apn }
+          - { name: brain-quiz, file: examples/brain_quiz.apn }
+          - { name: split-and-tip, file: examples/split_and_tip.apn }
+          - { name: hydrate, file: examples/hydrate.apn }
     env:
       APP_FILE: ${{ matrix.file }}
     steps:

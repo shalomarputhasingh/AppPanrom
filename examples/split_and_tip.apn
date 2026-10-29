@@ -1,0 +1,176 @@
+# Split & Tip - a bill splitter with tip presets and a pocket unit converter, on a light theme.
+app_uruvakku("Split and Tip")
+app_id_set("com.apppanrom.splittip")
+app_version_set("1.0.0")
+app_theme_set("light")
+
+mari tab = "split"
+
+function bg():
+    return "#FFF7ED"
+
+function card_bg():
+    return "#FFFFFF"
+
+function edge():
+    return "#FED7AA"
+
+function ink():
+    return "#431407"
+
+function muted():
+    return "#9A6B50"
+
+function accent():
+    return "#EA580C"
+
+function money(n):
+    mari parts = text_split(str(round(n, 2)), ".")
+    enna_na length(parts) == 1:
+        return "$" + parts[0] + ".00"
+    enna_na text_length(parts[1]) == 1:
+        return "$" + parts[0] + "." + parts[1] + "0"
+    return "$" + parts[0] + "." + parts[1]
+
+function tab_bg(name):
+    enna_na tab == name:
+        return accent()
+    return card_bg()
+
+function tab_ink(name):
+    enna_na tab == name:
+        return "#FFFFFF"
+    return muted()
+
+function show_split():
+    tab = "split"
+
+function show_convert():
+    tab = "convert"
+
+# ---------------------------------------------------------------- split maths
+function bill_amount():
+    mari b = input_value("bill")
+    enna_na b == null:
+        return 0
+    return b
+
+function tip_rate():
+    mari t = input_value("tip")
+    enna_na t == null:
+        return 0.15
+    return float(text_replace(t, "%", "")) / 100
+
+function people_count():
+    mari p = input_value("people")
+    enna_na p == null:
+        return 1
+    return int(p)
+
+function tip_total():
+    return bill_amount() * tip_rate()
+
+function grand_total():
+    return bill_amount() + tip_total()
+
+function per_person():
+    return grand_total() / people_count()
+
+function split_summary():
+    enna_na bill_amount() <= 0:
+        return "Enter the bill amount to see the split"
+    enna_na people_count() == 1:
+        return "Paying alone"
+    return "Between " + str(people_count()) + " people"
+
+# ------------------------------------------------------------- unit converter
+function conv_amount():
+    mari v = input_value("conv_value")
+    enna_na v == null:
+        return 0
+    return v
+
+function conv_result():
+    mari kind = input_value("conv_kind")
+    mari v = conv_amount()
+    enna_na kind == "km to miles":
+        return v * 0.621371
+    illana_enna kind == "miles to km":
+        return v / 0.621371
+    illana_enna kind == "kg to pounds":
+        return v * 2.204623
+    illana_enna kind == "pounds to kg":
+        return v / 2.204623
+    illana_enna kind == "Celsius to Fahrenheit":
+        return v * 9 / 5 + 32
+    illana_enna kind == "Fahrenheit to Celsius":
+        return (v - 32) * 5 / 9
+    illana_enna kind == "litres to gallons":
+        return v * 0.264172
+    return v
+
+function conv_unit():
+    mari kind = input_value("conv_kind")
+    enna_na kind == "km to miles":
+        return "miles"
+    illana_enna kind == "miles to km":
+        return "km"
+    illana_enna kind == "kg to pounds":
+        return "pounds"
+    illana_enna kind == "pounds to kg":
+        return "kg"
+    illana_enna kind == "Celsius to Fahrenheit":
+        return "°F"
+    illana_enna kind == "Fahrenheit to Celsius":
+        return "°C"
+    illana_enna kind == "litres to gallons":
+        return "gallons"
+    return ""
+
+function copy_result():
+    clipboard_copy(str(round(conv_result(), 2)))
+    toast_kaattu("Result copied")
+
+function copy_share():
+    clipboard_copy(money(per_person()))
+    toast_kaattu("Share copied")
+
+function reset_split():
+    input_set("bill", null)
+    input_set("tip", "15%")
+    input_set("people", "2")
+    toast_kaattu("Cleared")
+
+# ------------------------------------------------------------------- screens
+screen_uruvakku("home", style={"background": bg()}):
+    screen_title("Split and Tip")
+    column_uruvakku(style={"padding": 16, "gap": 14}):
+        row_uruvakku(style={"gap": 8}):
+            button("Split the bill", click_pannumbodhu=show_split, style={"background": tab_bg("split"), "text_color": tab_ink("split"), "font_size": 14, "font_weight": "bold", "corner_radius": 16, "height": 46, "width": "fill", "border_color": edge(), "border_width": 1})
+            button("Unit converter", click_pannumbodhu=show_convert, style={"background": tab_bg("convert"), "text_color": tab_ink("convert"), "font_size": 14, "font_weight": "bold", "corner_radius": 16, "height": 46, "width": "fill", "border_color": edge(), "border_width": 1})
+        enna_na tab == "split":
+            card_uruvakku(style={"background": accent(), "padding": 22, "gap": 4, "corner_radius": 28, "border_width": 0}):
+                text_kaattu("EACH PERSON PAYS", style={"text_color": "#FFEDD5", "font_size": 12, "font_weight": "bold", "text_align": "center"})
+                text_kaattu(money(per_person()), style={"text_color": "#FFFFFF", "font_size": 52, "font_weight": "bold", "text_align": "center"})
+                text_kaattu(split_summary(), style={"text_color": "#FFEDD5", "font_size": 14, "text_align": "center"})
+            card_uruvakku(style={"background": card_bg(), "padding": 16, "gap": 10, "corner_radius": 24, "border_color": edge()}):
+                number_input("bill", label="Bill amount ($)", placeholder="0.00")
+                dropdown_uruvakku("tip", options=["0%", "10%", "15%", "18%", "20%", "25%"], label="Tip", initial="15%")
+                dropdown_uruvakku("people", options=["1", "2", "3", "4", "5", "6", "7", "8"], label="Number of people", initial="2")
+            row_uruvakku(style={"gap": 10}):
+                card_uruvakku(style={"background": card_bg(), "padding": 14, "gap": 2, "corner_radius": 20, "border_color": edge(), "width": "fill"}):
+                    text_kaattu("TIP", style={"text_color": muted(), "font_size": 11, "font_weight": "bold", "text_align": "center"})
+                    text_kaattu(money(tip_total()), style={"text_color": ink(), "font_size": 22, "font_weight": "bold", "text_align": "center"})
+                card_uruvakku(style={"background": card_bg(), "padding": 14, "gap": 2, "corner_radius": 20, "border_color": edge(), "width": "fill"}):
+                    text_kaattu("TOTAL", style={"text_color": muted(), "font_size": 11, "font_weight": "bold", "text_align": "center"})
+                    text_kaattu(money(grand_total()), style={"text_color": ink(), "font_size": 22, "font_weight": "bold", "text_align": "center"})
+            button("Copy each person's share", click_pannumbodhu=copy_share, style={"background": accent(), "text_color": "#FFFFFF", "font_size": 16, "font_weight": "bold", "corner_radius": 18, "height": 52, "width": "fill"})
+            button("Clear", click_pannumbodhu=reset_split, style={"background": bg(), "text_color": muted(), "font_size": 14, "height": 40})
+        illana:
+            card_uruvakku(style={"background": accent(), "padding": 22, "gap": 4, "corner_radius": 28, "border_width": 0}):
+                text_kaattu("RESULT", style={"text_color": "#FFEDD5", "font_size": 12, "font_weight": "bold", "text_align": "center"})
+                text_kaattu(str(round(conv_result(), 2)) + " " + conv_unit(), style={"text_color": "#FFFFFF", "font_size": 40, "font_weight": "bold", "text_align": "center"})
+            card_uruvakku(style={"background": card_bg(), "padding": 16, "gap": 10, "corner_radius": 24, "border_color": edge()}):
+                number_input("conv_value", label="Value", placeholder="0")
+                dropdown_uruvakku("conv_kind", options=["km to miles", "miles to km", "kg to pounds", "pounds to kg", "Celsius to Fahrenheit", "Fahrenheit to Celsius", "litres to gallons"], label="Convert", initial="km to miles")
+            button("Copy result", click_pannumbodhu=copy_result, style={"background": accent(), "text_color": "#FFFFFF", "font_size": 16, "font_weight": "bold", "corner_radius": 18, "height": 52, "width": "fill"})

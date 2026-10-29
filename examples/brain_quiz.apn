@@ -1,0 +1,198 @@
+# Brain Quiz - a 10 question multiple-choice trivia game with instant feedback, scoring and a saved best score.
+# Written entirely in AppPanrom.
+app_uruvakku("Brain Quiz")
+app_id_set("com.apppanrom.brainquiz")
+app_version_set("1.0.0")
+app_theme_set("dark")
+
+mari questions = quiz_questions()
+mari index = 0
+mari score = 0
+mari answered = false
+mari picked = -1
+mari best = data_edu("best", 0)
+mari games = data_edu("games", 0)
+
+function quiz_questions():
+    return [
+        {"q": "Which planet is known as the Red Planet?", "options": ["Venus", "Mars", "Jupiter", "Mercury"], "answer": 1, "fact": "Iron oxide on its surface gives Mars its red colour."},
+        {"q": "How many continents are there on Earth?", "options": ["Five", "Six", "Seven", "Eight"], "answer": 2, "fact": "Africa, Antarctica, Asia, Australia, Europe, North America and South America."},
+        {"q": "What is the chemical symbol for gold?", "options": ["Ag", "Gd", "Go", "Au"], "answer": 3, "fact": "Au comes from the Latin word aurum."},
+        {"q": "Who painted the Mona Lisa?", "options": ["Michelangelo", "Leonardo da Vinci", "Raphael", "Van Gogh"], "answer": 1, "fact": "Leonardo painted it in the early 1500s."},
+        {"q": "What is the largest ocean on Earth?", "options": ["Atlantic", "Indian", "Arctic", "Pacific"], "answer": 3, "fact": "The Pacific covers about one third of the planet."},
+        {"q": "How many bones are in the adult human body?", "options": ["186", "206", "226", "246"], "answer": 1, "fact": "Babies are born with around 300 bones that fuse over time."},
+        {"q": "Which language has the most native speakers?", "options": ["English", "Spanish", "Mandarin Chinese", "Hindi"], "answer": 2, "fact": "Over 900 million people speak Mandarin as a first language."},
+        {"q": "What is the hardest natural substance?", "options": ["Quartz", "Diamond", "Steel", "Granite"], "answer": 1, "fact": "Diamond scores 10 on the Mohs hardness scale."},
+        {"q": "In which year did humans first land on the Moon?", "options": ["1965", "1969", "1972", "1975"], "answer": 1, "fact": "Apollo 11 landed on 20 July 1969."},
+        {"q": "Which gas do plants absorb from the air?", "options": ["Oxygen", "Nitrogen", "Carbon dioxide", "Hydrogen"], "answer": 2, "fact": "Plants turn carbon dioxide and sunlight into sugar and oxygen."}
+    ]
+
+# ------------------------------------------------------------------ look
+function bg():
+    return "#120F2E"
+
+function card_bg():
+    return "#1D1946"
+
+function edge():
+    return "#322C6B"
+
+function ink():
+    return "#F5F3FF"
+
+function muted():
+    return "#A5A0D6"
+
+function accent():
+    return "#8B5CF6"
+
+function option_bg(i):
+    enna_na not answered:
+        return card_bg()
+    enna_na i == questions[index]["answer"]:
+        return "#10B981"
+    enna_na i == picked:
+        return "#F43F5E"
+    return card_bg()
+
+function option_ink(i):
+    enna_na answered and (i == questions[index]["answer"] or i == picked):
+        return "#FFFFFF"
+    enna_na answered:
+        return muted()
+    return ink()
+
+function option_label(i):
+    mari letters = ["A", "B", "C", "D"]
+    mari text = letters[i] + "   " + questions[index]["options"][i]
+    enna_na answered and i == questions[index]["answer"]:
+        return text + "   ✓"
+    enna_na answered and i == picked:
+        return text + "   ✗"
+    return text
+
+function quiz_percent():
+    return round(index * 100 / length(questions))
+
+function verdict():
+    mari pct = score * 100 / length(questions)
+    enna_na pct == 100:
+        return "Perfect score! 🏆"
+    enna_na pct >= 80:
+        return "Brilliant work! 🌟"
+    enna_na pct >= 60:
+        return "Nicely done 👍"
+    enna_na pct >= 40:
+        return "Not bad, keep practising"
+    return "Give it another go 💪"
+
+function feedback():
+    enna_na picked == questions[index]["answer"]:
+        return "✅ Correct!  " + questions[index]["fact"]
+    return "❌ Not quite.  " + questions[index]["fact"]
+
+# ------------------------------------------------------------------ actions
+function start_quiz():
+    index = 0
+    score = 0
+    answered = false
+    picked = -1
+    screen_ku_poo("quiz")
+
+function choose(i):
+    enna_na answered:
+        return
+    picked = i
+    answered = true
+    enna_na i == questions[index]["answer"]:
+        score = score + 1
+
+function pick_a():
+    choose(0)
+
+function pick_b():
+    choose(1)
+
+function pick_c():
+    choose(2)
+
+function pick_d():
+    choose(3)
+
+function next_question():
+    enna_na not answered:
+        return
+    enna_na index + 1 >= length(questions):
+        games = games + 1
+        data_save_pannu("games", games)
+        enna_na score > best:
+            best = score
+            data_save_pannu("best", best)
+        screen_ku_poo("result")
+        return
+    index = index + 1
+    answered = false
+    picked = -1
+
+function next_label():
+    enna_na index + 1 >= length(questions):
+        return "See results"
+    return "Next question"
+
+function go_home():
+    screen_ku_poo("home")
+
+function reset_best():
+    best = 0
+    games = 0
+    data_save_pannu("best", 0)
+    data_save_pannu("games", 0)
+    toast_kaattu("Stats reset")
+
+# ------------------------------------------------------------------ screens
+screen_uruvakku("home", style={"background": bg()}):
+    screen_title("Brain Quiz")
+    center_ama(style={"padding": 24, "gap": 18}):
+        text_kaattu("🧠", style={"font_size": 72, "text_align": "center"})
+        text_kaattu("Brain Quiz", style={"text_color": ink(), "font_size": 36, "font_weight": "bold", "text_align": "center"})
+        text_kaattu("10 questions. One tap each. How much do you really know?", style={"text_color": muted(), "font_size": 16, "text_align": "center"})
+        row_uruvakku(style={"gap": 12}):
+            card_uruvakku(style={"background": card_bg(), "padding": 16, "gap": 2, "corner_radius": 20, "border_color": edge(), "width": "fill"}):
+                text_kaattu("BEST SCORE", style={"text_color": muted(), "font_size": 11, "font_weight": "bold", "text_align": "center"})
+                text_kaattu(str(best) + " / " + str(length(questions)), style={"text_color": ink(), "font_size": 28, "font_weight": "bold", "text_align": "center"})
+            card_uruvakku(style={"background": card_bg(), "padding": 16, "gap": 2, "corner_radius": 20, "border_color": edge(), "width": "fill"}):
+                text_kaattu("GAMES PLAYED", style={"text_color": muted(), "font_size": 11, "font_weight": "bold", "text_align": "center"})
+                text_kaattu(str(games), style={"text_color": ink(), "font_size": 28, "font_weight": "bold", "text_align": "center"})
+        button("Start quiz", click_pannumbodhu=start_quiz, style={"background": accent(), "text_color": "#FFFFFF", "font_size": 20, "font_weight": "bold", "corner_radius": 20, "height": 60, "width": "fill"})
+        button("Reset stats", click_pannumbodhu=reset_best, style={"background": "#120F2E", "text_color": muted(), "font_size": 14, "height": 40})
+
+screen_uruvakku("quiz", style={"background": bg()}):
+    screen_title("Question " + str(index + 1) + " of " + str(length(questions)))
+    column_uruvakku(style={"padding": 16, "gap": 14}):
+        row_uruvakku(style={"gap": 8, "justify": "space_between"}):
+            text_kaattu("Score: " + str(score), style={"text_color": accent(), "font_size": 15, "font_weight": "bold"})
+            text_kaattu("Best: " + str(best), style={"text_color": muted(), "font_size": 15})
+        progress_kaattu(quiz_percent(), style={"text_color": accent()})
+        card_uruvakku(style={"background": card_bg(), "padding": 20, "gap": 8, "corner_radius": 24, "border_color": edge()}):
+            text_kaattu("QUESTION " + str(index + 1), style={"text_color": accent(), "font_size": 12, "font_weight": "bold"})
+            text_kaattu(questions[index]["q"], style={"text_color": ink(), "font_size": 22, "font_weight": "bold"})
+        button(option_label(0), click_pannumbodhu=pick_a, style={"background": option_bg(0), "text_color": option_ink(0), "font_size": 17, "corner_radius": 16, "height": 56, "width": "fill", "border_color": edge(), "border_width": 1})
+        button(option_label(1), click_pannumbodhu=pick_b, style={"background": option_bg(1), "text_color": option_ink(1), "font_size": 17, "corner_radius": 16, "height": 56, "width": "fill", "border_color": edge(), "border_width": 1})
+        button(option_label(2), click_pannumbodhu=pick_c, style={"background": option_bg(2), "text_color": option_ink(2), "font_size": 17, "corner_radius": 16, "height": 56, "width": "fill", "border_color": edge(), "border_width": 1})
+        button(option_label(3), click_pannumbodhu=pick_d, style={"background": option_bg(3), "text_color": option_ink(3), "font_size": 17, "corner_radius": 16, "height": 56, "width": "fill", "border_color": edge(), "border_width": 1})
+        enna_na answered:
+            card_uruvakku(style={"background": card_bg(), "padding": 14, "corner_radius": 18, "border_color": edge()}):
+                text_kaattu(feedback(), style={"text_color": ink(), "font_size": 15})
+            button(next_label(), click_pannumbodhu=next_question, style={"background": accent(), "text_color": "#FFFFFF", "font_size": 18, "font_weight": "bold", "corner_radius": 18, "height": 54, "width": "fill"})
+
+screen_uruvakku("result", style={"background": bg()}):
+    screen_title("Results")
+    center_ama(style={"padding": 24, "gap": 16}):
+        text_kaattu("🎉", style={"font_size": 64, "text_align": "center"})
+        text_kaattu(verdict(), style={"text_color": ink(), "font_size": 28, "font_weight": "bold", "text_align": "center"})
+        card_uruvakku(style={"background": accent(), "padding": 24, "gap": 4, "corner_radius": 28, "border_width": 0, "width": "fill"}):
+            text_kaattu("YOUR SCORE", style={"text_color": "#EDE9FE", "font_size": 12, "font_weight": "bold", "text_align": "center"})
+            text_kaattu(str(score) + " / " + str(length(questions)), style={"text_color": "#FFFFFF", "font_size": 56, "font_weight": "bold", "text_align": "center"})
+            text_kaattu("Best ever: " + str(best) + " / " + str(length(questions)), style={"text_color": "#EDE9FE", "font_size": 15, "text_align": "center"})
+        button("Play again", click_pannumbodhu=start_quiz, style={"background": card_bg(), "text_color": ink(), "font_size": 18, "font_weight": "bold", "corner_radius": 18, "height": 56, "width": "fill", "border_color": accent(), "border_width": 2})
+        button("Home", click_pannumbodhu=go_home, style={"background": "#120F2E", "text_color": muted(), "height": 44})

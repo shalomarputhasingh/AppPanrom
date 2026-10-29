@@ -457,3 +457,163 @@ test('Daily Planner example: dashboard, search, filters, actions, add, stats and
   assert.ok(empty.some((n) => n.props.text === 'No tasks yet. Add your first one!'));
   assert.ok(empty.every((n) => n.c !== 'dropdown_uruvakku'), 'quick actions are hidden when there are no tasks');
 });
+
+test('Pocket Ledger example: totals, validation, budget, undo and persistence', () => {
+  const src = readFileSync(new URL('../../examples/pocket_ledger.apn', import.meta.url), 'utf8');
+  const storage = AP.memoryStorage();
+  const texts = (rt) => flat(rt.render()).filter((n) => n.c === 'text_kaattu').map((n) => n.props.text);
+  const has = (rt, re) => texts(rt).some((t) => re.test(t));
+  const mk = () => boot(src, { storage, namespace: 'ledger' });
+  const { rt, toasts } = mk();
+
+  assert.ok(has(rt, /336\.44/), 'sample total is shown');
+  assert.ok(flat(rt.render()).some((n) => n.c === 'progress_kaattu'));
+
+  rt.fire('go_add');
+  assert.equal(rt.currentScreen(), 'add');
+  rt.fire('save_expense');
+  assert.equal(toasts.at(-1), 'Enter an amount greater than zero');
+  rt.setInputFromUI('amount', 0);
+  rt.fire('save_expense');
+  assert.equal(toasts.at(-1), 'Enter an amount greater than zero');
+  rt.setInputFromUI('amount', 63.56);
+  rt.setInputFromUI('note', 'Lunch');
+  rt.fire('save_expense');
+  assert.equal(toasts.at(-1), 'Expense saved');
+  assert.equal(rt.currentScreen(), 'home');
+  assert.ok(has(rt, /400\.00/), 'total includes the new expense');
+  assert.ok(has(rt, /Lunch/), 'new expense is in recent list');
+
+  rt.fire('undo_last');
+  assert.ok(has(rt, /336\.44/));
+  assert.ok(!has(rt, /Lunch/));
+
+  // budget: lowering it below spending flips the message / colour
+  rt.fire('go_budget');
+  rt.setInputFromUI('budget_amount', 300);
+  rt.fire('save_budget');
+  assert.ok(has(rt, /over/i), 'over-budget is reported');
+
+  // persistence
+  const second = mk();
+  assert.ok(has(second.rt, /336\.44/), 'expenses survive a restart');
+  second.rt.fire('clear_all');
+  assert.ok(has(second.rt, /0\.00/));
+  second.rt.fire('undo_last');
+  assert.equal(second.toasts.at(-1), 'Nothing to undo');
+  second.rt.fire('restore_samples');
+  assert.ok(has(second.rt, /336\.44/));
+});
+
+test('Brain Quiz example: scoring, feedback, best score and persistence', () => {
+  const src = readFileSync(new URL('../../examples/brain_quiz.apn', import.meta.url), 'utf8');
+  const storage = AP.memoryStorage();
+  const texts = (rt) => flat(rt.render()).filter((n) => n.c === 'text_kaattu').map((n) => n.props.text);
+  const has = (rt, re) => texts(rt).some((t) => re.test(t));
+  const mk = () => boot(src, { storage, namespace: 'quiz' });
+  const { rt } = mk();
+  assert.equal(rt.currentScreen(), 'home');
+  assert.ok(has(rt, /^0 \/ 10$/));
+
+  // correct answers per question: B C D B D B C B B C
+  const key = ['pick_b', 'pick_c', 'pick_d', 'pick_b', 'pick_d', 'pick_b', 'pick_c', 'pick_b', 'pick_b', 'pick_c'];
+  rt.fire('start_quiz');
+  assert.equal(rt.currentScreen(), 'quiz');
+  rt.fire('next_question');
+  assert.ok(!flat(rt.render()).some((n) => n.props.text === 'Next question'), 'cannot skip before answering');
+
+  rt.fire('pick_a');
+  assert.ok(has(rt, /Not quite/));
+  rt.fire('pick_b');
+  assert.ok(has(rt, /Not quite/), 'answer is locked after the first pick');
+  rt.fire('next_question');
+  // play the rest perfectly
+  for (let i = 1; i < 10; i++) {
+    rt.fire(key[i]);
+    assert.ok(has(rt, /Correct!/));
+    rt.fire('next_question');
+  }
+  assert.equal(rt.currentScreen(), 'result');
+  assert.ok(has(rt, /^9 \/ 10$/));
+  assert.ok(has(rt, /Brilliant/));
+
+  // second game: perfect, best updates, persists
+  rt.fire('start_quiz');
+  for (let i = 0; i < 10; i++) { rt.fire(key[i]); rt.fire('next_question'); }
+  assert.ok(has(rt, /Perfect score/));
+  const again = mk();
+  assert.ok(has(again.rt, /^10 \/ 10$/), 'best score persisted');
+  assert.ok(has(again.rt, /^2$/), 'games played persisted');
+  again.rt.fire('reset_best');
+  assert.ok(has(again.rt, /^0 \/ 10$/));
+});
+
+test('Split & Tip example: tip maths, splitting and unit conversions', () => {
+  const src = readFileSync(new URL('../../examples/split_and_tip.apn', import.meta.url), 'utf8');
+  const { rt, toasts } = boot(src);
+  const texts = () => flat(rt.render()).filter((n) => n.c === 'text_kaattu').map((n) => n.props.text);
+  assert.ok(texts().includes('Enter the bill amount to see the split'));
+  rt.setInputFromUI('bill', 120);
+  rt.setInputFromUI('tip', '20%');
+  rt.setInputFromUI('people', '4');
+  assert.ok(texts().includes('$36.00'), 'each pays (120 + 24) / 4');
+  assert.ok(texts().includes('$24.00'), 'tip');
+  assert.ok(texts().includes('$144.00'), 'total');
+  assert.ok(texts().includes('Between 4 people'));
+  rt.setInputFromUI('bill', 47.5);
+  rt.setInputFromUI('tip', '18%');
+  rt.setInputFromUI('people', '3');
+  assert.ok(texts().includes('$18.68'), '(47.5*1.18)/3 = 18.683');
+  rt.fire('show_convert');
+  rt.setInputFromUI('conv_value', 100);
+  rt.setInputFromUI('conv_kind', 'Celsius to Fahrenheit');
+  assert.ok(texts().includes('212.0 °F') || texts().includes('212 °F'));
+  rt.setInputFromUI('conv_kind', 'km to miles');
+  rt.setInputFromUI('conv_value', 10);
+  assert.ok(texts().includes('6.21 miles'));
+  rt.setInputFromUI('conv_kind', 'pounds to kg');
+  rt.setInputFromUI('conv_value', 220.4623);
+  assert.ok(texts().includes('100.0 kg') || texts().includes('100 kg'));
+  rt.fire('copy_result');
+  assert.equal(toasts.at(-1), 'Result copied');
+});
+
+test('Hydrate example: adding, undo, goal, persistence and day rollover', () => {
+  const src = readFileSync(new URL('../../examples/hydrate.apn', import.meta.url), 'utf8');
+  const storage = AP.memoryStorage();
+  let day = new Date('2026-03-10T09:00:00Z');
+  const mk = () => boot(src, { storage, namespace: 'hyd', now: () => day });
+  const first = mk();
+  const rt = first.rt;
+  const texts = (r = rt) => flat(r.render()).filter((n) => n.c === 'text_kaattu').map((n) => n.props.text);
+  assert.ok(texts().includes('0.0 L') || texts().includes('0 L'));
+  rt.fire('add_250');
+  rt.fire('add_500');
+  assert.ok(texts().includes('0.75 L'));
+  assert.ok(texts().includes('38% of 2.0 L') || texts().includes('38% of 2 L'));
+  rt.setInputFromUI('custom_ml', 0);
+  rt.fire('add_custom');
+  assert.equal(first.toasts.at(-1), 'Enter an amount in ml');
+  rt.setInputFromUI('custom_ml', 330);
+  rt.fire('add_custom');
+  assert.ok(texts().includes('1.08 L'));
+  rt.fire('undo');
+  assert.ok(texts().includes('0.75 L'));
+  rt.setInputFromUI('goal_pick', '1500 ml');
+  rt.fire('set_goal');
+  assert.ok(texts().includes('50% of 1.5 L'));
+  rt.fire('add_500');
+  rt.fire('add_250');
+  assert.ok(texts().some((t) => t.startsWith('Goal complete')));
+  assert.ok(first.toasts.some((t) => t.startsWith('Goal reached')));
+
+  // restart on same day keeps state; next day archives it
+  const same = mk();
+  assert.ok(texts(same.rt).includes('1.5 L') || texts(same.rt).includes('1.5 L'));
+  day = new Date('2026-03-11T08:00:00Z');
+  const next = mk();
+  next.rt.fire('add_150');
+  assert.ok(texts(next.rt).includes('0.15 L'), 'a new day starts from zero');
+  assert.ok(texts(next.rt).includes('2026-03-10'), 'yesterday is in the history');
+  assert.ok(texts(next.rt).includes('1.5 L'));
+});
